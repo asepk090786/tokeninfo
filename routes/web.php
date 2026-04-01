@@ -29,6 +29,7 @@ Route::post('/admin/exambro-toggle', [CbtInfoController::class, 'toggleExambro']
 Route::post('/admin/exambro-warning-toggle', [CbtInfoController::class, 'toggleExambroWarning'])->name('cbt.exambro.warning.toggle');
 Route::post('/admin/exambro-token/generate', [CbtInfoController::class, 'generateExambroToken'])->name('cbt.exambro.token.generate');
 Route::post('/admin/exambro-token-visibility-toggle', [CbtInfoController::class, 'toggleExambroTokenVisibilityForPage'])->name('cbt.exambro.token.visibility.toggle');
+Route::post('/admin/exambro-pin-toggle', [CbtInfoController::class, 'toggleExambroPinStatus'])->name('cbt.exambro.pin.toggle');
 Route::post('/admin/exambro-api-key/generate', [CbtInfoController::class, 'generateExambroApiKey'])->name('cbt.exambro.api-key.generate');
 Route::get('/admin/exambro-api-key/download', [CbtInfoController::class, 'downloadExambroApiConfig'])->name('cbt.exambro.api-key.download');
 Route::post('/admin/logout', [CbtInfoController::class, 'logout'])->name('cbt.admin.logout');

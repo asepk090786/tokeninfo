@@ -264,26 +264,56 @@
             </div>
         @endif
 
-        <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: {{ $exambroActive ? 'var(--success-bg)' : 'var(--error-bg)' }};">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                <div>
-                    <p style="margin: 0; font-weight: 700; font-size: 1rem; color: {{ $exambroActive ? 'var(--success-text)' : 'var(--error-text)' }};">
-                        Status Token Exambro: {{ $exambroActive ? 'AKTIF' : 'NON-AKTIF' }}
+        <!-- SECTION 1: TOKEN EXAMBRO STATUS (CONTROL FUNCTIONALITY) -->
+        <div style="margin-top: 16px; padding: 18px; border-radius: 12px; border: 2px solid {{ $exambroActive ? '#10a856' : '#d94747' }}; background: {{ $exambroActive ? 'rgba(16, 168, 86, 0.08)' : 'rgba(217, 71, 71, 0.08)' }};">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+                <div style="flex: 1; min-width: 240px;">
+                    <p style="margin: 0; font-weight: 800; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                        <span>🔐</span>
+                        <span>{{ $exambroActive ? '✓ TOKEN AKTIF' : '✕ TOKEN NON-AKTIF' }}</span>
                     </p>
-                    <p style="margin: 4px 0 0; font-size: 0.88rem; color: var(--muted);">
-                        {{ $exambroActive ? 'Token dan PIN Exambro saat ini ditampilkan di halaman utama.' : 'Token dan PIN Exambro saat ini disembunyikan dari halaman utama.' }}
+                    <p style="margin: 8px 0 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5;">
+                        Status TOKEN Exambro menentukan apakah PIN Exambro dapat digunakan untuk fungsi exit di aplikasi Exambro. Ketika {{ $exambroActive ? 'AKTIF' : 'NON-AKTIF' }}, PIN {{ $exambroActive ? 'dapat' : 'tidak dapat' }} digunakan.
+                    </p>
+                    <p style="margin: 6px 0 0; font-size: 0.78rem; color: #9333ea; background: #f3e8ff; padding: 6px 10px; border-radius: 4px; display: inline-block;">
+                        Kontrol: FUNGSIONALITAS Token
                     </p>
                 </div>
-                <form action="{{ route('cbt.exambro.toggle') }}" method="post" style="margin: 0;">
+                <form action="{{ route('cbt.exambro.toggle') }}" method="post" style="margin: 0; flex-shrink: 0;">
                     @csrf
-                    <button type="submit" style="background: {{ $exambroActive ? 'var(--error-text)' : 'var(--success-text)' }}; color: #fff; border: 0; cursor: pointer; border-radius: 10px; padding: 10px 18px; font-weight: 600; font-size: 0.95rem;">
-                        {{ $exambroActive ? 'Non-aktifkan' : 'Aktifkan' }}
+                    <button type="submit" style="background: {{ $exambroActive ? '#d94747' : '#10a856' }}; color: #fff; border: 0; cursor: pointer; border-radius: 8px; padding: 12px 20px; font-weight: 700; font-size: 0.9rem; white-space: nowrap; transition: all 300ms;">
+                        {{ $exambroActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN' }}
                     </button>
                 </form>
             </div>
         </div>
 
         <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: {{ $exambroWarningValue === 1 ? 'var(--success-bg)' : '#f1f5f9' }};">
+                    <!-- SECTION 1.5: PIN EXAMBRO STATUS (CONTROL FUNCTIONALITY) -->
+                    <div style="margin-top: 16px; padding: 18px; border-radius: 12px; border: 2px solid {{ $exambroPinActive ? '#ec4899' : '#f87171' }}; background: {{ $exambroPinActive ? 'rgba(236, 72, 153, 0.08)' : 'rgba(248, 113, 113, 0.08)' }};">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+                            <div style="flex: 1; min-width: 240px;">
+                                <p style="margin: 0; font-weight: 800; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                                    <span>📌</span>
+                                    <span>{{ $exambroPinActive ? '✓ PIN AKTIF' : '✕ PIN NON-AKTIF' }}</span>
+                                </p>
+                                <p style="margin: 8px 0 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5;">
+                                    Status PIN Exambro menentukan apakah kode PIN ini dapat digunakan untuk fungsi exit/keluar dari Exambro. Kontrol ini INDEPENDENT dari TOKEN Status. Ketika PIN {{ $exambroPinActive ? 'AKTIF' : 'NON-AKTIF' }}, peserta {{ $exambroPinActive ? 'dapat' : 'tidak dapat' }} menggunakan PIN ini untuk keluar.
+                                </p>
+                                <p style="margin: 6px 0 0; font-size: 0.78rem; color: #ec4899; background: #fce7f3; padding: 6px 10px; border-radius: 4px; display: inline-block;">
+                                    Kontrol: FUNGSIONALITAS PIN (Independent)
+                                </p>
+                            </div>
+                            <form action="{{ route('cbt.exambro.pin.toggle') }}" method="post" style="margin: 0; flex-shrink: 0;">
+                                @csrf
+                                <button type="submit" style="background: {{ $exambroPinActive ? '#ec4899' : '#10a856' }}; color: #fff; border: 0; cursor: pointer; border-radius: 8px; padding: 12px 20px; font-weight: 700; font-size: 0.9rem; white-space: nowrap; transition: all 300ms;">
+                                    {{ $exambroPinActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN' }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: {{ $exambroWarningValue === 1 ? 'var(--success-bg)' : '#f1f5f9' }};">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                 <div>
                     <p style="margin: 0; font-weight: 700; font-size: 1rem; color: {{ $exambroWarningValue === 1 ? 'var(--success-text)' : 'var(--muted)' }};">
@@ -302,20 +332,25 @@
             </div>
         </div>
 
-        <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: {{ $exambroTokenVisibleOnPage ? 'var(--success-bg)' : '#f1f5f9' }};">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                <div>
-                    <p style="margin: 0; font-weight: 700; font-size: 1rem; color: {{ $exambroTokenVisibleOnPage ? 'var(--success-text)' : 'var(--muted)' }};">
-                        Tampilkan PIN di Halaman Exambro: {{ $exambroTokenVisibleOnPage ? 'ON' : 'OFF' }}
+        <!-- SECTION 2: PIN EXAMBRO VISIBILITY (CONTROL DISPLAY ONLY) -->
+        <div style="margin-top: 16px; padding: 18px; border-radius: 12px; border: 2px solid {{ $exambroTokenVisibleOnPage ? '#0ea5a5' : '#6b7280' }}; background: {{ $exambroTokenVisibleOnPage ? 'rgba(14, 165, 165, 0.08)' : 'rgba(107, 114, 128, 0.06)' }};">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+                <div style="flex: 1; min-width: 240px;">
+                    <p style="margin: 0; font-weight: 800; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                        <span>{{ $exambroTokenVisibleOnPage ? '👁️' : '🙈' }}</span>
+                        <span>PIN {{ $exambroTokenVisibleOnPage ? 'TERLIHAT' : 'TERSEMBUNYI' }}</span>
                     </p>
-                    <p style="margin: 4px 0 0; font-size: 0.88rem; color: var(--muted);">
-                        Toggle ini hanya untuk halaman Exambro. Di homepage utama, PIN Exambro tetap ditampilkan.
+                    <p style="margin: 8px 0 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5;">
+                        Kontrol TAMPILAN PIN Exambro di halaman Exambro. Ketika {{ $exambroTokenVisibleOnPage ? 'ON (Terlihat)' : 'OFF (Tersembunyi)' }}, kode PIN {{ $exambroTokenVisibleOnPage ? 'DITAMPILKAN' : 'DISEMBUNYIKAN' }} di halaman. DI HALAMAN HOMEPAGE UTAMA tetap ditampilkan.
+                    </p>
+                    <p style="margin: 6px 0 0; font-size: 0.78rem; color: #0ea5a5; background: #ccfbf1; padding: 6px 10px; border-radius: 4px; display: inline-block;">
+                        Kontrol: TAMPILAN PIN (Display Only)
                     </p>
                 </div>
-                <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0;">
+                <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0; flex-shrink: 0;">
                     @csrf
-                    <button type="submit" style="background: {{ $exambroTokenVisibleOnPage ? 'var(--error-text)' : 'var(--success-text)' }}; color: #fff; border: 0; cursor: pointer; border-radius: 10px; padding: 10px 18px; font-weight: 600; font-size: 0.95rem;">
-                        {{ $exambroTokenVisibleOnPage ? 'Sembunyikan PIN' : 'Tampilkan PIN' }}
+                    <button type="submit" style="background: {{ $exambroTokenVisibleOnPage ? '#0ea5a5' : '#6b7280' }}; color: #fff; border: 0; cursor: pointer; border-radius: 8px; padding: 12px 20px; font-weight: 700; font-size: 0.9rem; white-space: nowrap; transition: all 300ms;">
+                        {{ $exambroTokenVisibleOnPage ? '🙈 SEMBUNYIKAN PIN' : '👁️ TAMPILKAN PIN' }}
                     </button>
                 </form>
             </div>

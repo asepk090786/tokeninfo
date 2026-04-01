@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exambro Client</title>
+    <title>Exambro Client - Interactive Dashboard</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
@@ -21,6 +21,7 @@
             --bad-bg: #f8d3d3;
             --accent-start: #3f7de8;
             --accent-end: #7a58ea;
+            --transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         body {
@@ -31,6 +32,42 @@
             padding: 0;
         }
 
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
         .app-shell {
             width: min(760px, 100%);
             margin: 0 auto;
@@ -38,238 +75,375 @@
             background: var(--bg);
             border-left: 1px solid #bcc6d4;
             border-right: 1px solid #bcc6d4;
+            display: flex;
+            flex-direction: column;
         }
 
         .hero {
             background: linear-gradient(100deg, var(--accent-start), var(--accent-end));
             color: #fff;
-            padding: 18px 18px 16px;
+            padding: 14px 14px 12px;
             box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .hero-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .brand {
             display: flex;
             align-items: center;
-            justify-content: space-between;
             gap: 10px;
-        }
-
-        .brand-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
+            animation: slideIn 0.5s ease;
+            flex: 1;
+            min-width: 0;
         }
 
         .brand-logo {
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
             background: rgba(255, 255, 255, 0.2);
             display: grid;
             place-items: center;
+            flex-shrink: 0;
         }
 
         .brand-logo svg {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             fill: #f8fbff;
         }
 
+        .brand-content {
+            min-width: 0;
+        }
+
         .brand-title {
-            font-size: 1.9rem;
+            font-size: 1.4rem;
             font-weight: 800;
             letter-spacing: 0.2px;
             line-height: 1;
         }
 
         .brand-subtitle {
-            margin-top: 4px;
+            margin-top: 2px;
             opacity: 0.95;
-            font-size: clamp(0.98rem, 1.8vw, 1.18rem);
+            font-size: 0.85rem;
             font-weight: 700;
             line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .token-pill {
-            display: inline-flex;
+        .hero-actions {
+            display: flex;
             align-items: center;
             gap: 6px;
-            border-radius: 999px;
+            flex-shrink: 0;
+        }
+
+        .refresh-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
             padding: 6px 10px;
-            font-size: 0.76rem;
+            border-radius: 7px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            font-size: 0.7rem;
             font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.96);
+        }
+
+        .refresh-btn.loading {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .refresh-btn svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .refresh-btn.loading svg {
+            animation: spin 1s linear infinite;
+        }
+
+        .settings-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: 7px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .settings-toggle:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .settings-toggle svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
             background: rgba(255, 255, 255, 0.2);
             color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            text-transform: uppercase;
         }
 
-        .token-pill .dot {
-            width: 8px;
-            height: 8px;
+        .status-badge.live {
+            background: rgba(34, 197, 94, 0.3);
+        }
+
+        .status-badge .indicator {
+            width: 5px;
+            height: 5px;
             border-radius: 999px;
-            background: #facc15;
+            background: #fff;
+            display: inline-block;
         }
 
-        .token-pill.active .dot {
+        .status-badge.live .indicator {
             background: #22c55e;
-            box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.22);
+            animation: pulse 2s ease-in-out infinite;
         }
 
-        .token-pill.inactive .dot {
-            background: #fb7185;
-            box-shadow: 0 0 0 5px rgba(251, 113, 133, 0.2);
-        }
-
-        .token-block {
+        .hero-info {
             display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 6px;
-        }
-
-        .token-code-note {
-            display: inline-flex;
             align-items: center;
+            justify-content: space-between;
             gap: 8px;
-            font-size: 1rem;
-            font-weight: 700;
-            letter-spacing: 0.2px;
-            text-align: right;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            border-radius: 999px;
-            padding: 7px 12px;
-            box-shadow: 0 3px 10px rgba(29, 78, 216, 0.18);
-        }
-
-        .token-code-note .label {
-            opacity: 0.9;
-            font-size: 0.9rem;
-            font-weight: 700;
-        }
-
-        .token-code-note .value {
-            font-size: 1.18rem;
-            font-weight: 800;
-            line-height: 1;
-            color: #ffffff;
-            text-shadow: 0 1px 8px rgba(15, 23, 42, 0.35);
-        }
-
-        .hero-note {
-            margin-top: 16px;
-        }
-
-        .hero-note h2 {
-            font-size: 1.75rem;
-            font-weight: 700;
-            line-height: 1.15;
-        }
-
-        .hero-note p {
-            font-size: 0.95rem;
-            margin-top: 5px;
-            opacity: 0.82;
-        }
-
-        .warning-status {
             margin-top: 10px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border-radius: 999px;
-            padding: 7px 12px;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            font-size: 0.88rem;
+            animation: slideIn 0.5s ease 0.1s both;
+        }
+
+        .hero-left {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hero-title {
+            font-size: 1.3rem;
             font-weight: 700;
+            line-height: 1.1;
+            margin: 0;
         }
 
-        .warning-status .value {
-            font-size: 0.95rem;
-            font-weight: 800;
-        }
-
-        .warning-status.on .value {
-            color: #bbf7d0;
-        }
-
-        .warning-status.off .value {
-            color: #fee2e2;
-        }
-
-        .token-subnote {
-            margin-top: 8px;
-            font-size: 0.83rem;
+        .hero-subtitle {
+            font-size: 0.8rem;
+            margin-top: 2px;
             opacity: 0.85;
         }
 
-        .pin-toggle-box {
-            margin-top: 10px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.16);
-            border: 1px solid rgba(255, 255, 255, 0.28);
+        .hero-right {
+            flex-shrink: 0;
         }
 
-        .pin-toggle-box p {
-            margin: 0;
-            font-size: 0.8rem;
-            font-weight: 600;
-            opacity: 0.95;
+        .token-code {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.1px;
+            text-align: right;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 8px;
+            padding: 6px 10px;
+            box-shadow: 0 3px 10px rgba(29, 78, 216, 0.18);
+            transition: var(--transition);
+            animation: slideIn 0.5s ease 0.15s both;
         }
 
-        .pin-toggle-actions {
+        .token-code:hover {
+            background: rgba(255, 255, 255, 0.28);
+        }
+
+        .token-code .label {
+            opacity: 0.85;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+
+        .token-code .value {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #ffffff;
+            text-shadow: 0 1px 8px rgba(15, 23, 42, 0.35);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .token-code.hidden .value {
+            font-family: monospace;
+        }
+
+        .token-code.hidden-by-admin {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+
+        .hero-meta {
             margin-top: 8px;
+            font-size: 0.75rem;
+            opacity: 0.8;
             display: flex;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
         }
 
-        .pin-toggle-state {
+        .status-indicator {
             display: inline-flex;
             align-items: center;
-            border-radius: 999px;
-            padding: 4px 10px;
-            font-size: 0.75rem;
-            font-weight: 800;
-            letter-spacing: 0.6px;
-            text-transform: uppercase;
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            background: rgba(255, 255, 255, 0.22);
-            color: #fff;
+            gap: 4px;
         }
 
-        .pin-toggle-btn {
-            border: 1px solid rgba(255, 255, 255, 0.38);
-            background: rgba(2, 6, 23, 0.25);
-            color: #fff;
-            border-radius: 8px;
-            padding: 7px 11px;
-            font-size: 0.78rem;
+        .indicator-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 999px;
+        }
+
+        .indicator-dot.active {
+            background: #22c55e;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .indicator-dot.inactive {
+            background: #fb7185;
+        }
+
+        .settings-panel {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+            z-index: 100;
+        }
+
+        .settings-panel.active {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .settings-panel-content {
+            padding: 10px;
+        }
+
+        .settings-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #f0f0f0;
+        }
+
+        .settings-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-label {
+            display: block;
+            font-size: 0.7rem;
             font-weight: 700;
+            color: var(--text);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .toggle-checkbox {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 6px;
+        }
+
+        .toggle-checkbox input {
             cursor: pointer;
         }
 
-        .token-code-note.hidden-by-admin {
-            opacity: 0.75;
-            border-style: dashed;
+        .toggle-checkbox label {
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .interval-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .interval-input {
+            width: 50px;
+            padding: 4px 6px;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .interval-input:focus {
+            outline: none;
+            border-color: var(--accent-start);
+            box-shadow: 0 0 0 2px rgba(63, 125, 232, 0.1);
         }
 
         .content {
-            padding: 14px;
+            padding: 12px;
             display: grid;
-            gap: 12px;
+            gap: 10px;
+            flex: 1;
+            overflow-y: auto;
+            animation: fadeIn 0.3s ease;
         }
 
         .alert {
-            border-radius: 14px;
+            border-radius: 10px;
             border: 1px solid transparent;
-            padding: 12px 13px;
-            font-size: 0.85rem;
+            padding: 10px 12px;
+            font-size: 0.8rem;
             font-weight: 600;
+            animation: slideIn 0.3s ease;
         }
 
         .alert.error {
@@ -284,52 +458,80 @@
             color: #1d4ed8;
         }
 
-        .server-card {
+        .alert.success {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .skeleton-card {
             width: 100%;
             border: 1px solid var(--line);
-            border-radius: 16px;
-            background: #eef2f7;
-            box-shadow: 0 2px 0 rgba(15, 23, 42, 0.02);
-            padding: 14px;
+            border-radius: 12px;
+            background: linear-gradient(-90deg, #f0f4fa 25%, #e0e8f5 50%, #f0f4fa 75%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+            padding: 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 10px;
+            min-height: 60px;
+        }
+
+        .server-card {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #eef2f7;
+            box-shadow: 0 2px 0 rgba(15, 23, 42, 0.02);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
             text-align: left;
             cursor: pointer;
-            transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+            transition: var(--transition);
+            animation: slideIn 0.3s ease;
         }
 
         .server-card:hover:not([disabled]) {
-            transform: translateY(-1px);
+            transform: translateY(-3px);
             border-color: #9cb4da;
-            box-shadow: 0 5px 16px rgba(42, 58, 88, 0.08);
+            box-shadow: 0 10px 28px rgba(42, 58, 88, 0.12);
+        }
+
+        .server-card:active:not([disabled]) {
+            transform: translateY(-2px);
         }
 
         .server-card[disabled] {
             cursor: not-allowed;
-            opacity: 0.65;
+            opacity: 0.6;
             pointer-events: none;
         }
 
         .server-main {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             min-width: 0;
+            flex: 1;
         }
 
         .server-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 13px;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
             display: grid;
             place-items: center;
+            flex-shrink: 0;
         }
 
         .server-icon svg {
-            width: 22px;
-            height: 22px;
+            width: 20px;
+            height: 20px;
         }
 
         .server-icon.primary {
@@ -347,20 +549,24 @@
             color: #0ea5a5;
         }
 
+        .server-info {
+            min-width: 0;
+            flex: 1;
+        }
+
         .server-name {
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 700;
-            line-height: 1.2;
+            line-height: 1.1;
         }
 
         .server-caption {
-            margin-top: 3px;
-            font-size: 0.9rem;
+            margin-top: 2px;
+            font-size: 0.8rem;
             color: #55657f;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 340px;
         }
 
         .server-side {
@@ -372,11 +578,12 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 78px;
+            min-width: 70px;
             border-radius: 999px;
-            padding: 5px 12px;
-            font-size: 0.92rem;
+            padding: 4px 10px;
+            font-size: 0.8rem;
             font-weight: 700;
+            transition: var(--transition);
         }
 
         .status-pill.up {
@@ -390,17 +597,18 @@
         }
 
         .status-meta {
-            margin-top: 6px;
+            margin-top: 4px;
             color: #6d7b92;
-            font-size: 0.89rem;
+            font-size: 0.75rem;
             font-weight: 600;
         }
 
         .footer {
             text-align: center;
             color: #7d8aa0;
-            font-size: 0.83rem;
-            padding: 0 14px 16px;
+            font-size: 0.75rem;
+            padding: 10px 12px;
+            border-top: 1px solid #c8d0dd;
         }
 
         .footer a {
@@ -410,81 +618,161 @@
         }
 
         @media (max-width: 640px) {
-            .brand-title { font-size: 1.45rem; }
-            .hero-note h2 { font-size: 1.35rem; }
-            .server-caption { max-width: 200px; }
-            .status-pill { min-width: 72px; font-size: 0.84rem; }
-            .status-meta { font-size: 0.8rem; }
-            .token-code-note { font-size: 0.9rem; padding: 6px 10px; }
-            .token-code-note .label { font-size: 0.8rem; }
-            .token-code-note .value { font-size: 1rem; }
+            .brand-title { font-size: 1.1rem; }
+            .hero-title { font-size: 1rem; }
+            .hero { padding: 12px; }
+            .hero-top { margin-bottom: 8px; }
+            .token-code { font-size: 0.75rem; padding: 5px 8px; }
+            .token-code .label { font-size: 0.65rem; }
+            .token-code .value { font-size: 0.85rem; }
+            .refresh-btn { padding: 5px 8px; font-size: 0.65rem; }
         }
 
         @media (max-width: 420px) {
-            .server-card { padding: 12px; }
-            .server-name { font-size: 1rem; }
-            .server-caption { font-size: 0.82rem; }
-            .server-icon { width: 40px; height: 40px; }
+            .brand-title { font-size: 1rem; }
+            .server-card { padding: 10px; }
+            .server-name { font-size: 0.95rem; }
+            .server-icon { width: 36px; height: 36px; }
         }
     </style>
 </head>
 <body>
     <main class="app-shell">
-        <header class="hero">
-            <div class="brand">
-                <div class="brand-left">
+        <header class="hero" id="hero">
+            <div class="hero-top">
+                <div class="brand">
                     <div class="brand-logo" aria-hidden="true">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4v2h2a1 1 0 1 1 0 2H8a1 1 0 0 1 0-2h2v-2H6a2 2 0 0 1-2-2V5zm2 0v10h12V5H6zm2 2h8a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2zm0 3h5a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2z"/>
                         </svg>
                     </div>
-                    <div>
-                        <p class="brand-title">{{ $appName ?? 'Exambro Client' }}</p>
-                        <p class="brand-subtitle" id="school-name">{{ $schoolName ?? 'Memuat nama sekolah...' }}</p>
+                    <div class="brand-content">
+                        <p class="brand-title">{{ $appName ?? 'Exambro' }}</p>
+                        <p class="brand-subtitle" id="school-name">{{ $schoolName ?? 'Memuat...' }}</p>
                     </div>
                 </div>
-                <div class="token-block">
-                    <span id="token-pill" class="token-pill">
-                        <span class="dot"></span>
-                        <span id="token-pill-text">TOKEN ...</span>
-                    </span>
-                    <p class="token-code-note" id="token-code-note">
-                        <span class="label">PIN EXIT EXAMBRO</span>
-                        <span>:</span>
-                        <span class="value" id="token-code-value">......</span>
-                    </p>
-                </div>
-            </div>
-
-            <div class="hero-note">
-                <h2>Pilih Server Ujian</h2>
-                <p>Ketuk server yang tersedia untuk memulai koneksi</p>
-                <p class="warning-status" id="warning-status">
-                    <span>STATUS PERINGATAN:</span>
-                    <span class="value" id="warning-status-value">-</span>
-                </p>
-                <p class="token-subnote" id="cbt-token-note">Token Soal CBT: -</p>
-
-                @if (!empty($canTogglePinVisibility) && $canTogglePinVisibility === true)
-                    <div class="pin-toggle-box">
-                        <p>Admin Control: Tampilkan Kode/PIN Exambro di halaman ini</p>
-                        <div class="pin-toggle-actions">
-                            <span class="pin-toggle-state">{{ !empty($exambroTokenVisibleOnPage) && $exambroTokenVisibleOnPage ? 'ON' : 'OFF' }}</span>
-                            <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0;">
-                                @csrf
-                                <button type="submit" class="pin-toggle-btn">{{ !empty($exambroTokenVisibleOnPage) && $exambroTokenVisibleOnPage ? 'Ubah ke OFF' : 'Ubah ke ON' }}</button>
-                            </form>
+                <div class="hero-actions">
+                    <button id="refresh-btn" class="refresh-btn" title="Refresh data">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                            <path d="M3 21v-5h5"></path>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                    <div style="position: relative;">
+                        <button class="settings-toggle" id="settings-toggle" title="Settings">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l1.72-1.34c.15-.12.2-.34.1-.51l-1.63-2.82c-.1-.18-.32-.24-.51-.17l-2.03.8c-.42-.32-.9-.6-1.42-.8l-.3-2.16c-.04-.21-.21-.35-.42-.35h-3.26c-.21 0-.38.14-.42.35l-.3 2.16c-.52.2-1 .48-1.42.8l-2.03-.8c-.19-.07-.41 0-.51.17l-1.63 2.82c-.1.17-.05.39.1.51l1.72 1.34c-.05.3-.07.62-.07.94s.02.64.07.94l-1.72 1.34c-.15.12-.2.34-.1.51l1.63 2.82c.1.18.32.24.51.17l2.03-.8c.42.32.9.6 1.42.8l.3 2.16c.04.21.21.35.42.35h3.26c.21 0 .38-.14.42-.35l.3-2.16c.52-.2 1-.48 1.42-.8l2.03.8c.19.07.41 0 .51-.17l1.63-2.82c.1-.17.05-.39-.1-.51l-1.72-1.34zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                            </svg>
+                        </button>
+                        <div class="settings-panel" id="settings-panel">
+                            <div class="settings-panel-content">
+                                <div class="settings-item">
+                                    <label class="settings-label">Auto Refresh</label>
+                                    <div class="toggle-checkbox">
+                                        <input type="checkbox" id="auto-refresh-toggle" checked>
+                                        <label for="auto-refresh-toggle">Enabled</label>
+                                    </div>
+                                </div>
+                                <div class="settings-item">
+                                    <label class="settings-label">Refresh Interval</label>
+                                    <div class="interval-control">
+                                        <input type="number" id="interval-input" class="interval-input" value="20" min="5" max="120">
+                                        <span style="font-size: 0.8rem;">sec</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                @endif
+                </div>
             </div>
 
+            <div class="hero-info">
+                <div class="hero-left">
+                    <h2 class="hero-title">Pilih Server Ujian</h2>
+                    <p class="hero-subtitle">
+                        <span style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                            <span id="token-indicator" class="indicator-dot" style="display: inline-block;"></span>
+                            <strong id="token-status" style="font-size: 0.95rem;">Token Status: -</strong>
+                        </span>
+                        Ketuk server yang tersedia untuk memulai koneksi
+                    </p>
+                </div>
+                <div class="hero-right">
+                    <div class="token-code" id="token-code">
+                        <span class="label">PIN EXIT</span>
+                        <span class="value" id="token-value">......</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-meta">
+                <div class="status-indicator">
+                    <span style="font-weight: 700;">Token:</span>
+                    <span class="indicator-dot" id="token-indicator"></span>
+                    <span id="token-status" style="font-weight: 600;">-</span>
+                </div>
+                <span>•</span>
+                <div id="cbt-token-note" style="font-weight: 600;">Token Soal: -</div>
+                <span>•</span>
+                <span id="checked-at" style="font-size: 0.72rem;">Dicek: -</span>
+            </div>
+
+            @if (!empty($canTogglePinVisibility) && $canTogglePinVisibility === true)
+                <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.15); border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);">
+                    <p style="margin: 0 0 10px 0; font-weight: 700; font-size: 0.73rem; opacity: 0.9; text-transform: uppercase; color: #fff;">⚙️ Admin Controls - 3 Setting Terpisah:</p>
+                    
+                    <!-- 1. TOKEN EXAMBRO STATUS (FUNCTIONALITY) -->
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.08); border-radius: 6px;">
+                        <span style="background: var(--accent-start); border-radius: 4px; padding: 4px 8px; font-weight: 700; font-size: 0.65rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                            🔐 TOKEN
+                        </span>
+                        <span style="font-size: 0.65rem; font-weight: 600; opacity: 0.9;">Fungsionalitas</span>
+                        <form action="{{ route('cbt.exambro.toggle') }}" method="post" style="margin: 0; flex: 1;">
+                            @csrf
+                            <button type="submit" id="token-toggle-btn" style="width: 100%; background: rgba(255,255,255,0.2); color: #fff; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 300ms;">
+                                Memuat...
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- 2. PIN EXAMBRO STATUS (FUNCTIONALITY) -->
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.08); border-radius: 6px;">
+                        <span style="background: #ec4899; border-radius: 4px; padding: 4px 8px; font-weight: 700; font-size: 0.65rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                            📌 PIN
+                        </span>
+                        <span style="font-size: 0.65rem; font-weight: 600; opacity: 0.9;">Status</span>
+                        <form action="{{ route('cbt.exambro.pin.toggle') }}" method="post" style="margin: 0; flex: 1;">
+                            @csrf
+                            <button type="submit" id="pin-toggle-btn" style="width: 100%; background: rgba(255,255,255,0.2); color: #fff; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 300ms;">
+                                {{ !empty($exambroPinActive) && $exambroPinActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN' }}
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- 3. PIN VISIBILITY (DISPLAY ONLY) -->
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.08); border-radius: 6px;">
+                        <span style="background: #0ea5a5; border-radius: 4px; padding: 4px 8px; font-weight: 700; font-size: 0.65rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                            👁️ TAMPIL
+                        </span>
+                        <span style="font-size: 0.65rem; font-weight: 600; opacity: 0.9;">Display</span>
+                        <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0; flex: 1;">
+                            @csrf
+                            <button type="submit" style="width: 100%; background: rgba(255,255,255,0.2); color: #fff; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 300ms;">
+                                {{ !empty($exambroTokenVisibleOnPage) && $exambroTokenVisibleOnPage ? '🙈 Sembunyikan' : '👁️ Tampilkan' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            @endif
         </header>
 
         <section class="content" id="server-list"></section>
 
         <div class="footer">
-            <p id="checked-at">Terakhir dicek: -</p>
+            <p id="footer-note">Tersambung dengan baik • Sistem aktif</p>
         </div>
     </main>
 
@@ -492,8 +780,9 @@
         <button type="button" class="server-card">
             <div class="server-main">
                 <div class="server-icon"></div>
-                <div>
+                <div class="server-info">
                     <p class="server-name"></p>
+                    <p class="server-caption"></p>
                 </div>
             </div>
             <div class="server-side">
@@ -503,170 +792,269 @@
         </button>
     </template>
 
-    <script>
-        // Key diinjeksi langsung dari server agar tidak bergantung URLSearchParams
-        var apiKey = '{{ addslashes(request()->query("key", "")) }}';
-        var API = '{{ url("api/exambro-info") }}' + (apiKey ? ('?key=' + encodeURIComponent(apiKey)) : '');
+    <template id="skeleton-template">
+        <div class="skeleton-card"></div>
+    </template>
 
+    <script>
+        // ============================================
+        // Configuration & State
+        // ============================================
+        const config = {
+            apiKey: '{{ addslashes(request()->query("key", "")) }}',
+            apiBase: '{{ url("api/exambro-info") }}',
+            refreshInterval: 20000,
+            autoRefresh: true,
+            parseTokenStatus: parseTokenStatusValue,
+            parseWarningStatus: parseWarningStatusValue
+        };
+
+        let state = {
+            isLoading: false,
+            lastUpdate: null,
+            refreshInterval: null,
+            tokenStatus: false
+        };
+
+        // ============================================
+        // DOM Elements
+        // ============================================
+        const elements = {
+            refreshBtn: document.getElementById('refresh-btn'),
+            settingsToggle: document.getElementById('settings-toggle'),
+            settingsPanel: document.getElementById('settings-panel'),
+            autoRefreshToggle: document.getElementById('auto-refresh-toggle'),
+            intervalInput: document.getElementById('interval-input'),
+            serverList: document.getElementById('server-list'),
+            schoolName: document.getElementById('school-name'),
+            tokenCode: document.getElementById('token-code'),
+            tokenValue: document.getElementById('token-value'),
+            tokenIndicator: document.getElementById('token-indicator'),
+            tokenStatus: document.getElementById('token-status'),
+            cbtTokenNote: document.getElementById('cbt-token-note'),
+            checkedAt: document.getElementById('checked-at'),
+            footerNote: document.getElementById('footer-note')
+        };
+
+        // ============================================
+        // Utility Functions
+        // ============================================
         function serverIconSvg() {
             return '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm2 0v4h12V4H6zm-2 12a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4zm2 0v4h12v-4H6zm2-11h3a1 1 0 0 1 0 2H8a1 1 0 0 1 0-2zm0 12h3a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2z"/></svg>';
         }
 
-        function makeAlert(type, message) {
-            var box = document.createElement('div');
+        function parseTokenStatusValue(val) {
+            if (val === true || val === 1 || val === '1' || val === 'true' || val === 'active') return true;
+            return false;
+        }
+
+        function parseWarningStatusValue(val) {
+            return Number(val) === 1;
+        }
+
+        function createAlert(type, message) {
+            const box = document.createElement('div');
             box.className = 'alert ' + type;
             box.textContent = message;
             return box;
         }
 
-        function render(data) {
-            var rawActive = data.exambro_active;
-            var tokenActive = rawActive === true
-                || rawActive === 1
-                || rawActive === '1'
-                || rawActive === 'true'
-                || rawActive === 'active'
-                || data.token_status === 'active';
-            var warningValue = Number(data.warning != null ? data.warning : (data.peringatan != null ? data.peringatan : 1));
-            var showWarning = warningValue === 1;
-            var serverList = document.getElementById('server-list');
-            var checkedAt = document.getElementById('checked-at');
-            var schoolName = document.getElementById('school-name');
-            var tokenPill = document.getElementById('token-pill');
-            var tokenPillText = document.getElementById('token-pill-text');
-            var tokenCodeValue = document.getElementById('token-code-value');
-            var warningStatus = document.getElementById('warning-status');
-            var warningStatusValue = document.getElementById('warning-status-value');
-            var cbtTokenNote = document.getElementById('cbt-token-note');
-            var tokenCodeNote = document.getElementById('token-code-note');
-
-            serverList.innerHTML = '';
-            schoolName.textContent = data.school || 'Sekolah Ujian';
-
-            tokenPill.classList.remove('active', 'inactive');
-            tokenPill.classList.add(tokenActive ? 'active' : 'inactive');
-            tokenPillText.textContent = tokenActive ? 'Token Aktif' : 'Token Non-Aktif';
-            var showPinOnPage = data.show_exambro_token_on_page === true
-                || data.show_exambro_token_on_page === 1
-                || data.show_exambro_token_on_page === '1'
-                || data.show_exambro_token_on_page === 'true';
-
-            if (showPinOnPage) {
-                tokenCodeValue.textContent = data.token || '-';
-                tokenCodeNote.classList.remove('hidden-by-admin');
-            } else {
-                tokenCodeValue.textContent = 'DISEMBUNYIKAN';
-                tokenCodeNote.classList.add('hidden-by-admin');
+        function showSkeletonLoading() {
+            elements.serverList.innerHTML = '';
+            const template = document.getElementById('skeleton-template');
+            for (let i = 0; i < 3; i++) {
+                const skeleton = template.content.cloneNode(true);
+                elements.serverList.appendChild(skeleton);
             }
-            cbtTokenNote.textContent = 'Token Soal CBT: ' + (data.cbt_token || data.token_soal || '-');
+        }
 
-            warningStatus.classList.remove('on', 'off');
-            warningStatus.classList.add(showWarning ? 'on' : 'off');
-            warningStatusValue.textContent = showWarning ? 'ON' : 'OFF';
+        function setLoading(loading) {
+            state.isLoading = loading;
+            elements.refreshBtn.classList.toggle('loading', loading);
+            elements.refreshBtn.disabled = loading;
+        }
 
+        // ============================================
+        // Event Listeners
+        // ============================================
+        elements.refreshBtn.addEventListener('click', () => {
+            if (!state.isLoading) load();
+        });
+
+        elements.settingsToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            elements.settingsPanel.classList.toggle('active');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.settings-toggle') && !e.target.closest('.settings-panel')) {
+                elements.settingsPanel.classList.remove('active');
+            }
+        });
+
+        elements.autoRefreshToggle.addEventListener('change', () => {
+            config.autoRefresh = elements.autoRefreshToggle.checked;
+            rescheduleRefresh();
+        });
+
+        elements.intervalInput.addEventListener('change', () => {
+            const val = parseInt(elements.intervalInput.value, 10);
+            if (val >= 5 && val <= 120) {
+                config.refreshInterval = val * 1000;
+                rescheduleRefresh();
+            } else {
+                elements.intervalInput.value = config.refreshInterval / 1000;
+            }
+        });
+
+        // ============================================
+        // Rendering Functions
+        // ============================================
+        function render(data) {
+            const tokenActive = config.parseTokenStatus(data.exambro_active || data.token_status);
+            const showWarning = config.parseWarningStatus(data.warning ?? data.peringatan ?? 1);
+            
+            state.tokenStatus = tokenActive;
+
+            // Update header
+            elements.schoolName.textContent = data.school || 'Sekolah Ujian';
+            
+            // Update token indicator
+            elements.tokenIndicator.className = 'indicator-dot ' + (tokenActive ? 'active' : 'inactive');
+            elements.tokenStatus.textContent = tokenActive ? 'AKTIF' : 'NON-AKTIF';
+
+            // Update token toggle button
+            const tokenToggleBtn = document.getElementById('token-toggle-btn');
+            if (tokenToggleBtn) {
+                tokenToggleBtn.textContent = tokenActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN';
+                tokenToggleBtn.style.background = tokenActive ? 'rgba(217, 71, 71, 0.4)' : 'rgba(16, 168, 86, 0.4)';
+            }
+
+            // Update PIN/Token code
+            const showPin = data.show_exambro_token_on_page === true || data.show_exambro_token_on_page === 1 || data.show_exambro_token_on_page === '1';
+            if (showPin) {
+                elements.tokenValue.textContent = data.token || '-';
+                elements.tokenCode.classList.remove('hidden-by-admin');
+            } else {
+                elements.tokenValue.textContent = '••••••';
+                elements.tokenCode.classList.add('hidden-by-admin');
+            }
+
+            elements.cbtTokenNote.textContent = 'Token Soal: ' + (data.cbt_token || data.token_soal || '-');
+
+            // Clear server list
+            elements.serverList.innerHTML = '';
+
+            // Add alert if needed
             if (showWarning) {
                 if (!tokenActive) {
-                    serverList.appendChild(
-                        makeAlert('error', 'Token Exambro non-aktif. Namun pilihan server yang Online tetap dapat dipilih.')
+                    elements.serverList.appendChild(
+                        createAlert('error', '⚠️ Token Exambro non-aktif. Server Online tetap dapat dipilih.')
                     );
                 } else {
-                    serverList.appendChild(
-                        makeAlert('info', 'Server yang berstatus Online dapat dipilih. Server Down akan otomatis nonaktif.')
+                    elements.serverList.appendChild(
+                        createAlert('info', '✓ Server yang Online dapat dipilih.')
                     );
                 }
             }
 
-            var servers = Array.isArray(data.servers) && data.servers.length > 0
-                ? data.servers.map(function (server) {
-                    return {
-                        key: server.key,
-                        label: server.name,
-                        url: server.url,
-                        status: server.status,
-                        selectable: server.selectable === true
-                    };
-                })
+            // Build server list
+            const servers = Array.isArray(data.servers) && data.servers.length > 0
+                ? data.servers.map(s => ({
+                    key: s.key,
+                    label: s.name,
+                    url: s.url,
+                    status: s.status,
+                    selectable: s.selectable === true
+                }))
                 : [
                     { key: 'primary', label: 'Server Utama', url: data.server_utama, status: data.server_utama_status, selectable: data.server_utama_status === 'up' && !!data.server_utama },
                     { key: 'backup1', label: 'Server 2', url: data.server_backup1, status: data.server_backup1_status, selectable: data.server_backup1_status === 'up' && !!data.server_backup1 },
                     { key: 'backup2', label: 'Server 3', url: data.server_backup2, status: data.server_backup2_status, selectable: data.server_backup2_status === 'up' && !!data.server_backup2 }
                 ];
 
-            servers.forEach(function (server) {
-                var tpl = document.getElementById('server-card-template');
-                var card = tpl.content.firstElementChild.cloneNode(true);
+            servers.forEach((server, idx) => {
+                const template = document.getElementById('server-card-template');
+                const card = template.content.firstElementChild.cloneNode(true);
 
-                var icon = card.querySelector('.server-icon');
+                const icon = card.querySelector('.server-icon');
                 icon.classList.add(server.key);
                 icon.innerHTML = serverIconSvg();
 
                 card.querySelector('.server-name').textContent = server.label;
 
-                var statusPill = card.querySelector('.status-pill');
-                var statusMeta = card.querySelector('.status-meta');
-                var isOnline = server.status === 'up';
+                const isOnline = server.status === 'up';
+                const statusPill = card.querySelector('.status-pill');
+                const statusMeta = card.querySelector('.status-meta');
+
                 statusPill.classList.add(isOnline ? 'up' : 'down');
                 statusPill.textContent = isOnline ? 'Online' : 'Down';
+                statusMeta.textContent = isOnline ? 'Ketuk untuk terhubung' : 'Server tidak tersedia';
 
-                if (isOnline) {
-                    statusMeta.textContent = 'Ketuk untuk terhubung';
-                } else {
-                    statusMeta.textContent = 'Server tidak tersedia';
-                }
-
-                var selectable = isOnline && !!server.url && server.selectable !== false;
+                const selectable = isOnline && !!server.url && server.selectable !== false;
                 if (!selectable) {
                     card.setAttribute('disabled', 'disabled');
-                    card.setAttribute('aria-disabled', 'true');
-                    card.setAttribute('tabindex', '-1');
                     card.disabled = true;
                 } else {
-                    card.addEventListener('click', function () {
+                    card.addEventListener('click', () => {
                         window.location.href = server.url;
                     });
                 }
 
-                serverList.appendChild(card);
+                elements.serverList.appendChild(card);
             });
 
-            checkedAt.textContent = 'Terakhir dicek: ' + new Date(data.checked_at).toLocaleString('id-ID');
+            // Update timestamp
+            const now = new Date(data.checked_at);
+            elements.checkedAt.textContent = 'Dicek: ' + now.toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+            state.lastUpdate = now;
         }
 
+        // ============================================
+        // API & Loading
+        // ============================================
         function load() {
-            var requestUrl = API
-                + (API.indexOf('?') !== -1 ? '&' : '?')
-                + '_t=' + Date.now();
+            setLoading(true);
+            showSkeletonLoading();
 
-            fetch(requestUrl, {
+            const url = config.apiBase + (config.apiBase.indexOf('?') !== -1 ? '&' : '?') + '_t=' + Date.now();
+
+            fetch(url, {
                 cache: 'no-store',
                 headers: {
                     'Accept': 'application/json',
-                    'X-Exambro-Key': apiKey
+                    'X-Exambro-Key': config.apiKey
                 }
             })
-                .then(function (response) {
-                    if (!response.ok) {
-                        throw new Error('Akses ditolak atau API tidak dapat diakses.');
-                    }
-
+                .then(response => {
+                    if (!response.ok) throw new Error('Akses ditolak atau API tidak dapat diakses.');
                     return response.json();
                 })
-                .then(function (payload) {
-                    if (payload.status === 'error') {
-                        throw new Error(payload.message || 'Gagal memuat data Exambro.');
-                    }
-
+                .then(payload => {
+                    if (payload.status === 'error') throw new Error(payload.message || 'Gagal memuat data.');
                     render(payload);
+                    elements.footerNote.textContent = '✓ Tersambung dengan baik • Sistem aktif';
                 })
-                .catch(function (error) {
-                    var serverList = document.getElementById('server-list');
-                    serverList.innerHTML = '';
-                    serverList.appendChild(makeAlert('error', error && error.message ? error.message : 'Gagal memuat data.'));
-                });
+                .catch(error => {
+                    elements.serverList.innerHTML = '';
+                    elements.serverList.appendChild(createAlert('error', '❌ ' + (error.message || 'Gagal memuat data.')));
+                    elements.footerNote.textContent = '✗ Gagal terhubung • Coba muat ulang';
+                })
+                .finally(() => setLoading(false));
         }
 
+        function rescheduleRefresh() {
+            if (state.refreshInterval) clearInterval(state.refreshInterval);
+            if (config.autoRefresh) {
+                state.refreshInterval = setInterval(load, config.refreshInterval);
+            }
+        }
+
+        // ============================================
+        // Initialize
+        // ============================================
         load();
-        setInterval(load, 30000);
+        rescheduleRefresh();
     </script>
 </body>
 </html>

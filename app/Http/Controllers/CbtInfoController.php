@@ -30,6 +30,7 @@ class CbtInfoController extends Controller
             'appName' => $info->app_name,
             'canTogglePinVisibility' => session('cbt_admin_auth') === true,
             'exambroTokenVisibleOnPage' => $this->isExambroTokenVisibleOnPage(),
+            'exambroPinActive' => $this->isExambroPinActive(),
         ]);
     }
 
@@ -37,6 +38,7 @@ class CbtInfoController extends Controller
     {
         $info = $this->getInfoFromGarudaCbt();
         $exambroActive = $this->isExambroActive();
+        $pinActive = $this->isExambroPinActive();
         $servers = $this->buildServerList($info);
 
         return $this->apiJson([
@@ -44,6 +46,10 @@ class CbtInfoController extends Controller
             'cbt_token' => $info->cbt_token,
             'exambro_token' => $info->exambro_token,
             'exambro_active' => $exambroActive,
+            'status_pin' => $pinActive ? 1 : 0,
+            'status_pin_label' => $pinActive ? 'ACTIVE' : 'INACTIVE',
+            'statusPin' => $pinActive ? 1 : 0,
+            'statusPIN' => $pinActive ? 1 : 0,
             'school' => $info->school,
             'app_name' => $info->app_name,
             'application_name' => $info->app_name,
@@ -81,6 +87,8 @@ class CbtInfoController extends Controller
         $backup2 = $serverMap->get('backup2', []);
         $tokenStatusCode = $exambroActive ? 1 : 0;
         $tokenStatusLabel = $exambroActive ? 'ACTIVE' : 'INACTIVE';
+        $pinStatusCode = $this->isExambroPinActive() ? 1 : 0;
+        $pinStatusLabel = $pinStatusCode === 1 ? 'ACTIVE' : 'INACTIVE';
         $warningStatusCode = $warningValue === 1 ? 1 : 0;
         $warningStatusLabel = $warningStatusCode === 1 ? 'ON' : 'OFF';
         $exambroToken = $info->exambro_token;
@@ -114,31 +122,32 @@ class CbtInfoController extends Controller
             'status_flags'      => [
                 'token_active' => $tokenStatusCode === 1,
                 'warning_active' => $warningStatusCode === 1,
+                'pin_active' => $pinStatusCode === 1,
             ],
-            'status_pin'        => $tokenStatusCode,
+            'status_pin'        => $pinStatusCode,
             'status_peringatan' => $warningStatusCode,
-            'status_pin_label'        => $tokenStatusLabel,
+            'status_pin_label'        => $pinStatusLabel,
             'status_peringatan_label' => $warningStatusLabel,
             // Alias kompatibilitas untuk berbagai parser client
-            'statusPIN'         => $tokenStatusCode,
+            'statusPIN'         => $pinStatusCode,
             'statusPeringatan'  => $warningStatusCode,
-            'statusPin'         => $tokenStatusCode,
+            'statusPin'         => $pinStatusCode,
             'statusWarning'     => $warningStatusCode,
             // Format ringkas yang direkomendasikan untuk parser aplikasi Exambro
             'app_status' => [
-                'status_pin' => $tokenStatusCode,
+                'status_pin' => $pinStatusCode,
                 'status_peringatan' => $warningStatusCode,
                 'token' => $exambroTokenForExambroPage,
             ],
             'appStatus' => [
-                'statusPin' => $tokenStatusCode,
+                'statusPin' => $pinStatusCode,
                 'statusPeringatan' => $warningStatusCode,
                 'token' => $exambroTokenForExambroPage,
             ],
             'status_exambro' => [
-                'pin' => $tokenStatusCode,
+                'pin' => $pinStatusCode,
                 'peringatan' => $warningStatusCode,
-                'pin_label' => $tokenStatusLabel,
+                'pin_label' => $pinStatusLabel,
                 'peringatan_label' => $warningStatusLabel,
             ],
             'token_updated_at'  => $info->token_updated_at,
@@ -191,13 +200,17 @@ class CbtInfoController extends Controller
         }
 
         $tokenActive = $this->isExambroActive() ? 1 : 0;
+        $pinActive = $this->isExambroPinActive() ? 1 : 0;
         $exambroToken = $this->getExambroToken();
         $info = $this->getInfoFromGarudaCbt();
 
         return $this->apiJson([
             'status' => 'ok',
-            'status_pin' => $tokenActive,
-            'status_pin_label' => $tokenActive === 1 ? 'ACTIVE' : 'INACTIVE',
+            'status_pin' => $pinActive,
+            'status_pin_label' => $pinActive === 1 ? 'ACTIVE' : 'INACTIVE',
+            'statusPin' => $pinActive,
+            'statusPIN' => $pinActive,
+            'token_active' => $tokenActive,
             'token' => $exambroToken,
             'exambro_token' => $exambroToken,
             'school' => $info->school,
@@ -219,10 +232,13 @@ class CbtInfoController extends Controller
         }
 
         $warningActive = $this->getExambroWarningValue() === 1 ? 1 : 0;
+        $pinActive = $this->isExambroPinActive() ? 1 : 0;
         $info = $this->getInfoFromGarudaCbt();
 
         return $this->apiJson([
             'status' => 'ok',
+            'status_pin' => $pinActive,
+            'status_pin_label' => $pinActive === 1 ? 'ACTIVE' : 'INACTIVE',
             'status_peringatan' => $warningActive,
             'status_peringatan_label' => $warningActive === 1 ? 'ON' : 'OFF',
             'school' => $info->school,
@@ -244,6 +260,7 @@ class CbtInfoController extends Controller
         $exambroActive = $this->isExambroActive();
         $exambroWarningValue = $this->getExambroWarningValue();
         $exambroTokenVisibleOnPage = $this->isExambroTokenVisibleOnPage();
+            $exambroPinActive = $this->isExambroPinActive();
         $admin = (object) [
             'username' => session('cbt_admin_username'),
             'name' => session('cbt_admin_name'),
@@ -268,6 +285,7 @@ class CbtInfoController extends Controller
             'exambroTokenSource',
             'exambroWarningValue',
             'exambroTokenVisibleOnPage',
+                        'exambroPinActive',
             'exambroPageUrl',
             'exambroApiUrl',
             'exambroConfigDownloadUrl'
@@ -469,6 +487,20 @@ class CbtInfoController extends Controller
         return redirect()->route('cbt.admin')->with('status', 'Tampilan PIN Exambro di halaman Exambro diubah menjadi ' . ($nextValue === 1 ? 'TAMPIL' : 'SEMBUNYI') . '.');
     }
 
+    public function toggleExambroPinStatus(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $currentStatus = $this->isExambroPinActive();
+        Cache::forever('exambro_pin_active', ! $currentStatus);
+
+        $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
+
+        return redirect()->route('cbt.admin')->with('status', "Status PIN Exambro diubah menjadi {$statusLabel}.");
+    }
+
     public function downloadExambroApiConfig(Request $request)
     {
         if (! session('cbt_admin_auth')) {
@@ -482,6 +514,7 @@ class CbtInfoController extends Controller
             'api_key'          => $apiKey,
             'exambro_page_url' => $pageUrl,
             'exambro_token'    => $this->getExambroToken(),
+            'status_pin'       => $this->isExambroPinActive() ? 1 : 0,
             'school'           => $this->getInfoFromGarudaCbt()->school,
             'app_name'         => $this->getInfoFromGarudaCbt()->app_name,
             'application_name' => $this->getInfoFromGarudaCbt()->app_name,
@@ -509,6 +542,7 @@ class CbtInfoController extends Controller
             'api_key'          => $apiKey,
             'exambro_page_url' => $pageUrl,
             'exambro_token'    => $this->getExambroToken(),
+            'status_pin'       => $this->isExambroPinActive() ? 1 : 0,
             'school'           => $this->getInfoFromGarudaCbt()->school,
             'app_name'         => $this->getInfoFromGarudaCbt()->app_name,
             'application_name' => $this->getInfoFromGarudaCbt()->app_name,
@@ -529,6 +563,27 @@ class CbtInfoController extends Controller
     private function isExambroActive(): bool
     {
         $raw = Cache::get('exambro_token_active', false);
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
+        if (is_int($raw) || is_float($raw)) {
+            return (int) $raw === 1;
+        }
+
+        if (is_string($raw)) {
+            $normalized = strtolower(trim($raw));
+
+            return in_array($normalized, ['1', 'true', 'yes', 'on', 'active', 'aktif'], true);
+        }
+
+        return (bool) $raw;
+    }
+
+    private function isExambroPinActive(): bool
+    {
+        $raw = Cache::get('exambro_pin_active', true);
 
         if (is_bool($raw)) {
             return $raw;
