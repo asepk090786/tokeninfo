@@ -49,6 +49,14 @@
             margin: 8px 0 0;
         }
 
+        .school-name {
+            margin-top: 10px;
+            font-size: clamp(1.05rem, 2vw, 1.35rem);
+            font-weight: 800;
+            color: var(--ink);
+            line-height: 1.25;
+        }
+
         .alert {
             margin-top: 14px;
             border-radius: 10px;
@@ -239,6 +247,8 @@
 <body>
     <main class="container">
         <h1>Admin Informasi CBT</h1>
+        <p class="school-name">{{ $info->school }}</p>
+        <p><strong>{{ $info->app_name }}</strong></p>
         <p>Perbarui token, 3 URL CBT, dan keterangan untuk ditampilkan di halaman utama.</p>
         <p>Login sebagai: <strong>{{ $admin->name ?: $admin->username }}</strong></p>
 
@@ -273,6 +283,44 @@
             </div>
         </div>
 
+        <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: {{ $exambroWarningValue === 1 ? 'var(--success-bg)' : '#f1f5f9' }};">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <p style="margin: 0; font-weight: 700; font-size: 1rem; color: {{ $exambroWarningValue === 1 ? 'var(--success-text)' : 'var(--muted)' }};">
+                        Aktifkan Peringatan Exambro: {{ $exambroWarningValue === 1 ? 'ON (1)' : 'OFF (0)' }}
+                    </p>
+                    <p style="margin: 4px 0 0; font-size: 0.88rem; color: var(--muted);">
+                        Saat ON (1), pesan peringatan akan ditampilkan di halaman Exambro. Saat OFF (0), pesan peringatan disembunyikan.
+                    </p>
+                </div>
+                <form action="{{ route('cbt.exambro.warning.toggle') }}" method="post" style="margin: 0;">
+                    @csrf
+                    <button type="submit" style="background: {{ $exambroWarningValue === 1 ? 'var(--error-text)' : 'var(--success-text)' }}; color: #fff; border: 0; cursor: pointer; border-radius: 10px; padding: 10px 18px; font-weight: 600; font-size: 0.95rem;">
+                        {{ $exambroWarningValue === 1 ? 'OFF-kan Peringatan' : 'ON-kan Peringatan' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: {{ $exambroTokenVisibleOnPage ? 'var(--success-bg)' : '#f1f5f9' }};">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <p style="margin: 0; font-weight: 700; font-size: 1rem; color: {{ $exambroTokenVisibleOnPage ? 'var(--success-text)' : 'var(--muted)' }};">
+                        Tampilkan PIN di Halaman Exambro: {{ $exambroTokenVisibleOnPage ? 'ON' : 'OFF' }}
+                    </p>
+                    <p style="margin: 4px 0 0; font-size: 0.88rem; color: var(--muted);">
+                        Toggle ini hanya untuk halaman Exambro. Di homepage utama, PIN Exambro tetap ditampilkan.
+                    </p>
+                </div>
+                <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0;">
+                    @csrf
+                    <button type="submit" style="background: {{ $exambroTokenVisibleOnPage ? 'var(--error-text)' : 'var(--success-text)' }}; color: #fff; border: 0; cursor: pointer; border-radius: 10px; padding: 10px 18px; font-weight: 600; font-size: 0.95rem;">
+                        {{ $exambroTokenVisibleOnPage ? 'Sembunyikan PIN' : 'Tampilkan PIN' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
         <section class="server-grid">
             @foreach ($servers as $server)
                 <article class="server-card {{ $server['status_class'] }}">
@@ -284,6 +332,34 @@
         </section>
 
         <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: #f8fafc;">
+            <p style="margin: 0; font-weight: 700; font-size: 1rem;">PIN Exambro (Exit PIN)</p>
+            <p style="margin: 6px 0 0; font-size: 0.88rem; color: var(--muted);">
+                PIN Exambro disimpan di sisi web (file server), bukan di tabel database CBT.
+            </p>
+
+            <div style="margin-top: 12px; display: grid; gap: 10px;">
+                <div>
+                    <label for="exambro-token" style="margin-bottom: 6px;">
+                        PIN Exambro Aktif
+                        <span style="font-weight:400; color: var(--muted); font-size:0.85rem;">
+                            (sumber: {{ $exambroTokenSource === 'web' ? 'web/server file' : '.env' }})
+                        </span>
+                    </label>
+                    <input id="exambro-token" type="text" value="{{ $exambroToken ?: 'Belum ada PIN Exambro' }}" readonly>
+                </div>
+
+                <form action="{{ route('cbt.exambro.token.generate') }}" method="post" style="margin: 0;">
+                    @csrf
+                    <button type="submit" style="background:#0f766e;">Generate PIN Exambro</button>
+                </form>
+            </div>
+
+            <div class="actions" style="margin-top: 10px;">
+                <button type="button" id="copy-exambro-token" style="background:#0ea5e9;">Salin PIN Exambro</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: #f8fafc;">
             <p style="margin: 0; font-weight: 700; font-size: 1rem;">Akses Exambro dari Admin</p>
             <p style="margin: 6px 0 0; font-size: 0.88rem; color: var(--muted);">
                 Link ini sudah berisi API key. Bisa dibuka langsung dari panel admin atau ditempel ke aplikasi.
@@ -291,9 +367,37 @@
 
             @if (empty($exambroApiKey))
                 <div class="alert alert-error" style="margin-top: 10px;">
-                    EXAMBRO_API_KEY belum diatur di .env. Isi dulu agar proteksi API bekerja.
+                    API key Exambro belum tersedia. Silakan generate dari tombol di bawah.
+                </div>
+            @elseif ($exambroApiKeySource === 'env')
+                <div class="alert alert-error" style="margin-top: 10px;">
+                    Key aktif saat ini berasal dari <strong>.env</strong>, bukan hasil generate panel admin.
+                    Klik <strong>Generate API Key Baru</strong> agar config download selalu sinkron.
+                </div>
+            @else
+                <div class="alert alert-success" style="margin-top: 10px;">
+                    Key aktif adalah hasil generate panel admin. Config download sudah sinkron dengan server.
                 </div>
             @endif
+
+            <div style="margin-top: 12px; display: grid; gap: 10px;">
+                <div>
+                    <label for="exambro-current-key" style="margin-bottom: 6px;">
+                        API Key Aktif
+                        @if (!empty($exambroApiKey))
+                            <span style="font-weight:400; color: var(--muted); font-size:0.85rem;">
+                                (sumber: {{ $exambroApiKeySource === 'generated' ? 'generated via panel admin' : '.env' }})
+                            </span>
+                        @endif
+                    </label>
+                    <input id="exambro-current-key" type="text" value="{{ $exambroApiKey ?: 'Belum ada API key' }}" readonly>
+                </div>
+
+                <form action="{{ route('cbt.exambro.api-key.generate') }}" method="post" style="margin: 0;">
+                    @csrf
+                    <button type="submit" style="background:#0369a1;">Generate API Key Baru</button>
+                </form>
+            </div>
 
             <div style="margin-top: 12px; display: grid; gap: 10px;">
                 <div>
@@ -305,12 +409,21 @@
                     <label for="exambro-api-url" style="margin-bottom: 6px;">Endpoint API Exambro (lengkap key)</label>
                     <input id="exambro-api-url" type="text" value="{{ $exambroApiUrl }}" readonly>
                 </div>
+
+                <div>
+                    <label for="exambro-config-download-url" style="margin-bottom: 6px;">Link Download config.json untuk Aplikasi</label>
+                    <input id="exambro-config-download-url" type="text" value="{{ $exambroConfigDownloadUrl }}" readonly>
+                </div>
             </div>
 
             <div class="actions" style="margin-top: 10px;">
                 <a class="link" href="{{ $exambroPageUrl }}" target="_blank" rel="noopener noreferrer">Buka Halaman Exambro</a>
+                <a class="link" href="{{ route('cbt.exambro.api-key.download') }}">Download Konfigurasi API Key</a>
+                <a class="link" href="{{ $exambroConfigDownloadUrl }}">Download config.json (Aplikasi)</a>
+                <button type="button" id="copy-exambro-key" style="background:#0ea5e9;">Salin API Key</button>
                 <button type="button" id="copy-exambro-page" style="background:#0ea5e9;">Salin Link Halaman</button>
                 <button type="button" id="copy-exambro-api" style="background:#0ea5e9;">Salin Link API</button>
+                <button type="button" id="copy-exambro-config-download" style="background:#0ea5e9;">Salin Link Download config.json</button>
             </div>
         </div>
 
@@ -388,10 +501,16 @@
         (function () {
             const tokenInput = document.getElementById('token');
             const toggle = document.getElementById('toggle-token');
+            const exambroTokenInput = document.getElementById('exambro-token');
+            const keyInput = document.getElementById('exambro-current-key');
             const pageInput = document.getElementById('exambro-page-url');
             const apiInput = document.getElementById('exambro-api-url');
+            const configDownloadInput = document.getElementById('exambro-config-download-url');
+            const copyExambroTokenBtn = document.getElementById('copy-exambro-token');
+            const copyKeyBtn = document.getElementById('copy-exambro-key');
             const copyPageBtn = document.getElementById('copy-exambro-page');
             const copyApiBtn = document.getElementById('copy-exambro-api');
+            const copyConfigDownloadBtn = document.getElementById('copy-exambro-config-download');
 
             if (!tokenInput || !toggle) {
                 return;
@@ -438,9 +557,27 @@
                 });
             }
 
+            if (copyExambroTokenBtn) {
+                copyExambroTokenBtn.addEventListener('click', function () {
+                    copyValue(exambroTokenInput, copyExambroTokenBtn, 'PIN Exambro kosong.');
+                });
+            }
+
+            if (copyKeyBtn) {
+                copyKeyBtn.addEventListener('click', function () {
+                    copyValue(keyInput, copyKeyBtn, 'API key Exambro kosong.');
+                });
+            }
+
             if (copyApiBtn) {
                 copyApiBtn.addEventListener('click', function () {
                     copyValue(apiInput, copyApiBtn, 'Link API Exambro kosong.');
+                });
+            }
+
+            if (copyConfigDownloadBtn) {
+                copyConfigDownloadBtn.addEventListener('click', function () {
+                    copyValue(configDownloadInput, copyConfigDownloadBtn, 'Link download config.json kosong.');
                 });
             }
         })();

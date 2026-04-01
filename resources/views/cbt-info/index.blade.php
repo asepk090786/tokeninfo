@@ -54,6 +54,14 @@
             opacity: 0.95;
         }
 
+        .school-name {
+            margin-top: 10px;
+            font-size: clamp(1.15rem, 2.4vw, 1.55rem);
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            line-height: 1.25;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -296,6 +304,8 @@
     <div class="wrapper">
         <section class="hero">
             <h1>Informasi Token dan URL CBT</h1>
+            <p class="school-name">{{ $info->school }}</p>
+            <p><strong>{{ $info->app_name }}</strong></p>
             <p>Pastikan token dan alamat CBT sesuai dengan pengumuman terbaru sekolah.</p>
         </section>
 
@@ -313,7 +323,7 @@
 
             <article class="card token-card">
                 <p class="label">Token CBT</p>
-                <p class="value token-value" id="token-value">{{ $info->token }}</p>
+                <p class="value token-value" id="token-value">{{ $info->cbt_token }}</p>
                 <p class="token-meta" id="token-meta">
                 @if (!empty($info->token_valid_until))
                     Berlaku sampai: {{ $info->token_valid_until }}
@@ -323,6 +333,12 @@
                     Waktu berlaku token belum tersedia.
                 @endif
                 </p>
+            </article>
+
+            <article class="card token-card" id="exambro-token-card" style="background: #f8fafc; border-color: #cbd5e1;">
+                <p class="label">PIN Exambro (Exit PIN)</p>
+                <p class="value token-value" id="exambro-token-value">{{ $info->exambro_token ?: '-' }}</p>
+                <p class="token-meta">PIN khusus Exambro, terpisah dari token akses soal CBT.</p>
             </article>
         </section>
 
@@ -379,77 +395,7 @@
             }
 
             function refreshToken() {
-                fetch('{{ route("cbt.token.info") }}', {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    // Update token
-                    var tokenEl = document.getElementById('token-value');
-                    if (tokenEl.textContent.trim() !== data.token) {
-                        tokenEl.textContent = data.token;
-                        applyFade(tokenEl);
-                    }
-
-                    // Update token meta
-                    var metaEl = document.getElementById('token-meta');
-                    var metaText = '';
-                    if (data.token_valid_until) {
-                        metaText = 'Berlaku sampai: ' + data.token_valid_until;
-                    } else if (data.token_updated_at) {
-                        metaText = 'Terakhir diperbarui: ' + data.token_updated_at;
-                    } else {
-                        metaText = 'Waktu berlaku token belum tersedia.';
-                    }
-                    metaEl.textContent = metaText;
-
-                    // Update exambro status
-                    var active = data.exambro_active;
-                    var card = document.getElementById('exambro-card');
-                    var label = document.getElementById('exambro-label');
-                    var value = document.getElementById('exambro-value');
-                    var dot = document.getElementById('exambro-dot');
-                    var text = document.getElementById('exambro-text');
-                    var hint = document.getElementById('exambro-hint');
-
-                    card.style.background = active ? '#ecfdf3' : '#fff1f2';
-                    card.style.borderColor = active ? '#a7f3d0' : '#fecdd3';
-                    label.style.color = active ? '#047857' : '#be123c';
-                    value.style.color = active ? '#047857' : '#be123c';
-                    dot.style.background = active ? '#10b981' : '#f43f5e';
-                    dot.style.boxShadow = '0 0 8px ' + (active ? 'rgba(16,185,129,0.5)' : 'rgba(244,63,94,0.4)');
-                    text.textContent = active ? 'AKTIF' : 'NON-AKTIF';
-                    hint.style.color = active ? '#047857' : '#be123c';
-                    hint.textContent = active ? 'Token dan PIN Exambro dapat digunakan.' : 'Token dan PIN Exambro sedang tidak aktif.';
-
-                    // Update description
-                    var descEl = document.getElementById('desc-section');
-                    descEl.textContent = data.description || 'Tidak ada keterangan tambahan.';
-
-                    // Update server cards
-                    var serverGrid = document.getElementById('server-grid');
-                    if (serverGrid && Array.isArray(data.servers)) {
-                        var html = data.servers.map(function (server) {
-                            return '' +
-                                '<article class="server-card ' + server.status_class + '" data-server-key="' + server.key + '">' +
-                                    '<p class="server-name">' + server.name + '</p>' +
-                                    '<p class="server-status ' + server.status_class + '">' + server.status_label + '</p>' +
-                                    '<img class="qr-image" src="' + server.qr_url + '" alt="QR code ' + server.name.toLowerCase() + '">' +
-                                '</article>';
-                        }).join('');
-
-                        serverGrid.innerHTML = html;
-                        applyFade(serverGrid);
-                    }
-
-                    applyFade(card);
-                })
-                .catch(function () {
-                    // Jika fetch gagal, fallback full reload
-                    window.location.reload();
-                });
-
-                remaining = INTERVAL;
+                window.location.reload();
             }
 
             setInterval(function () {

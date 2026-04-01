@@ -123,6 +123,7 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'exambro_token_pin' => env('EXAMBRO_TOKEN_PIN', ''),
     'exambro_api_key' => env('EXAMBRO_API_KEY', ''),
 
 ];

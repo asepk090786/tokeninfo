@@ -5,15 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class CbtInfoController extends Controller
 {
     public function index()
     {
         $info = $this->getInfoFromGarudaCbt();
-        $exambroActive = Cache::get('exambro_token_active', false);
+        $exambroActive = $this->isExambroActive();
         $servers = $this->buildServerList($info);
 
         return view('cbt-info.index', compact('info', 'exambroActive', 'servers'));
@@ -21,18 +23,31 @@ class CbtInfoController extends Controller
 
     public function exambroPage()
     {
-        return view('cbt-info.exambro');
+        $info = $this->getInfoFromGarudaCbt();
+
+        return view('cbt-info.exambro', [
+            'schoolName' => $info->school,
+            'appName' => $info->app_name,
+            'canTogglePinVisibility' => session('cbt_admin_auth') === true,
+            'exambroTokenVisibleOnPage' => $this->isExambroTokenVisibleOnPage(),
+        ]);
     }
 
     public function tokenInfo()
     {
         $info = $this->getInfoFromGarudaCbt();
-        $exambroActive = Cache::get('exambro_token_active', false);
+        $exambroActive = $this->isExambroActive();
         $servers = $this->buildServerList($info);
 
         return $this->apiJson([
-            'token' => $info->token,
+            'token' => $info->cbt_token,
+            'cbt_token' => $info->cbt_token,
+            'exambro_token' => $info->exambro_token,
             'exambro_active' => $exambroActive,
+            'school' => $info->school,
+            'app_name' => $info->app_name,
+            'application_name' => $info->app_name,
+            'nama_aplikasi' => $info->app_name,
             'token_updated_at' => $info->token_updated_at,
             'token_valid_until' => $info->token_valid_until,
             'description' => $info->description,
@@ -52,28 +67,88 @@ class CbtInfoController extends Controller
         }
 
         $info           = $this->getInfoFromGarudaCbt();
-        $exambroActive  = Cache::get('exambro_token_active', false);
+        $exambroActive  = $this->isExambroActive();
+        $warningValue   = $this->getExambroWarningValue();
         $servers        = $this->buildServerList($info);
         $serverMap      = collect($servers)->keyBy('key');
         $recommended    = collect($servers)->first(function ($server) {
-            return ($server['is_up'] ?? false) === true && ! empty($server['url']);
+            return (($server['is_up'] ?? false) === true)
+                && ! empty($server['url']);
         });
 
         $primary = $serverMap->get('primary', []);
         $backup1 = $serverMap->get('backup1', []);
         $backup2 = $serverMap->get('backup2', []);
+        $tokenStatusCode = $exambroActive ? 1 : 0;
+        $tokenStatusLabel = $exambroActive ? 'ACTIVE' : 'INACTIVE';
+        $warningStatusCode = $warningValue === 1 ? 1 : 0;
+        $warningStatusLabel = $warningStatusCode === 1 ? 'ON' : 'OFF';
+        $exambroToken = $info->exambro_token;
+        $showExambroTokenOnPage = $this->isExambroTokenVisibleOnPage();
+        $exambroTokenForExambroPage = $showExambroTokenOnPage ? $exambroToken : null;
 
         return $this->apiJson([
             /* ── Informasi Token ────────────────────────────── */
             'status'            => 'ok',
-            'token'             => $info->token,
+            'token'             => $exambroTokenForExambroPage,
+            'exambro_token'     => $exambroTokenForExambroPage,
+            'token_soal'        => $info->cbt_token,
+            'cbt_token'         => $info->cbt_token,
             'exambro_active'    => $exambroActive,
-            'token_status'      => $exambroActive ? 'active' : 'inactive',
+            'show_exambro_token_on_page' => $showExambroTokenOnPage,
+            'token_status'      => strtolower($tokenStatusLabel),
+            'warning'           => $warningStatusCode,
+            'peringatan'        => $warningStatusCode,
+
+            /* Field status yang mudah diproses aplikasi Exambro */
+            'token_active'      => $tokenStatusCode,
+            'warning_active'    => $warningStatusCode,
+            'status_code'       => [
+                'token' => $tokenStatusCode,
+                'warning' => $warningStatusCode,
+            ],
+            'status_label'      => [
+                'token' => $tokenStatusLabel,
+                'warning' => $warningStatusLabel,
+            ],
+            'status_flags'      => [
+                'token_active' => $tokenStatusCode === 1,
+                'warning_active' => $warningStatusCode === 1,
+            ],
+            'status_pin'        => $tokenStatusCode,
+            'status_peringatan' => $warningStatusCode,
+            'status_pin_label'        => $tokenStatusLabel,
+            'status_peringatan_label' => $warningStatusLabel,
+            // Alias kompatibilitas untuk berbagai parser client
+            'statusPIN'         => $tokenStatusCode,
+            'statusPeringatan'  => $warningStatusCode,
+            'statusPin'         => $tokenStatusCode,
+            'statusWarning'     => $warningStatusCode,
+            // Format ringkas yang direkomendasikan untuk parser aplikasi Exambro
+            'app_status' => [
+                'status_pin' => $tokenStatusCode,
+                'status_peringatan' => $warningStatusCode,
+                'token' => $exambroTokenForExambroPage,
+            ],
+            'appStatus' => [
+                'statusPin' => $tokenStatusCode,
+                'statusPeringatan' => $warningStatusCode,
+                'token' => $exambroTokenForExambroPage,
+            ],
+            'status_exambro' => [
+                'pin' => $tokenStatusCode,
+                'peringatan' => $warningStatusCode,
+                'pin_label' => $tokenStatusLabel,
+                'peringatan_label' => $warningStatusLabel,
+            ],
             'token_updated_at'  => $info->token_updated_at,
             'token_valid_until' => $info->token_valid_until,
 
             /* ── Informasi Sekolah ──────────────────────────── */
             'school'            => $info->school,
+            'app_name'          => $info->app_name,
+            'application_name'  => $info->app_name,
+            'nama_aplikasi'     => $info->app_name,
             'description'       => $info->description,
 
             /* ── Server Utama ───────────────────────────────── */
@@ -97,11 +172,64 @@ class CbtInfoController extends Controller
                     'name' => $server['name'] ?? null,
                     'url' => $server['url'] ?? null,
                     'status' => ($server['is_up'] ?? false) ? 'up' : 'down',
-                    'selectable' => $exambroActive && (($server['is_up'] ?? false) === true) && ! empty($server['url']),
+                    'selectable' => (($server['is_up'] ?? false) === true) && ! empty($server['url']),
                 ];
             })->values(),
 
             'checked_at'        => now()->toIso8601String(),
+        ]);
+    }
+
+    public function exambroTokenStatus(Request $request)
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204)->withHeaders([
+                'Access-Control-Allow-Origin'  => '*',
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Accept, Origin, X-Exambro-Key',
+            ]);
+        }
+
+        $tokenActive = $this->isExambroActive() ? 1 : 0;
+        $exambroToken = $this->getExambroToken();
+        $info = $this->getInfoFromGarudaCbt();
+
+        return $this->apiJson([
+            'status' => 'ok',
+            'status_pin' => $tokenActive,
+            'status_pin_label' => $tokenActive === 1 ? 'ACTIVE' : 'INACTIVE',
+            'token' => $exambroToken,
+            'exambro_token' => $exambroToken,
+            'school' => $info->school,
+            'app_name' => $info->app_name,
+            'application_name' => $info->app_name,
+            'nama_aplikasi' => $info->app_name,
+            'checked_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    public function exambroWarningStatus(Request $request)
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204)->withHeaders([
+                'Access-Control-Allow-Origin'  => '*',
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Accept, Origin, X-Exambro-Key',
+            ]);
+        }
+
+        $warningActive = $this->getExambroWarningValue() === 1 ? 1 : 0;
+        $info = $this->getInfoFromGarudaCbt();
+
+        return $this->apiJson([
+            'status' => 'ok',
+            'status_peringatan' => $warningActive,
+            'status_peringatan_label' => $warningActive === 1 ? 'ON' : 'OFF',
+            'school' => $info->school,
+            'app_name' => $info->app_name,
+            'application_name' => $info->app_name,
+            'nama_aplikasi' => $info->app_name,
+            'checked_at' => now()->toIso8601String(),
         ]);
     }
 
@@ -113,15 +241,21 @@ class CbtInfoController extends Controller
 
         $info = $this->getInfoFromGarudaCbt();
         $servers = $this->buildServerList($info);
-        $exambroActive = Cache::get('exambro_token_active', false);
+        $exambroActive = $this->isExambroActive();
+        $exambroWarningValue = $this->getExambroWarningValue();
+        $exambroTokenVisibleOnPage = $this->isExambroTokenVisibleOnPage();
         $admin = (object) [
             'username' => session('cbt_admin_username'),
             'name' => session('cbt_admin_name'),
         ];
 
-        $exambroApiKey = (string) config('app.exambro_api_key', '');
-        $exambroPageUrl = route('cbt.exambro.page', ['key' => $exambroApiKey]);
-        $exambroApiUrl = route('cbt.exambro.info', ['key' => $exambroApiKey]);
+        $exambroApiKey       = $this->getExambroApiKey();
+        $exambroApiKeySource = (string) Cache::get('exambro_api_key', '') !== '' ? 'generated' : 'env';
+        $exambroToken        = $this->getExambroToken();
+        $exambroTokenSource  = $this->getExambroTokenSource();
+        $exambroPageUrl      = route('cbt.exambro.page', ['key' => $exambroApiKey]);
+        $exambroApiUrl       = route('cbt.exambro.info', ['key' => $exambroApiKey]);
+        $exambroConfigDownloadUrl = route('cbt.exambro.api-key.download.app', ['key' => $exambroApiKey]);
 
         return view('cbt-info.admin', compact(
             'info',
@@ -129,8 +263,14 @@ class CbtInfoController extends Controller
             'admin',
             'servers',
             'exambroApiKey',
+            'exambroApiKeySource',
+            'exambroToken',
+            'exambroTokenSource',
+            'exambroWarningValue',
+            'exambroTokenVisibleOnPage',
             'exambroPageUrl',
-            'exambroApiUrl'
+            'exambroApiUrl',
+            'exambroConfigDownloadUrl'
         ));
     }
 
@@ -140,7 +280,12 @@ class CbtInfoController extends Controller
             return redirect()->route('cbt.admin');
         }
 
-        return view('cbt-info.login');
+        $info = $this->getInfoFromGarudaCbt();
+
+        return view('cbt-info.login', [
+            'schoolName' => $info->school,
+            'appName' => $info->app_name,
+        ]);
     }
 
     public function login(Request $request)
@@ -245,12 +390,275 @@ class CbtInfoController extends Controller
             return redirect()->route('cbt.admin.login');
         }
 
-        $currentStatus = Cache::get('exambro_token_active', false);
+        $currentStatus = $this->isExambroActive();
         Cache::forever('exambro_token_active', ! $currentStatus);
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
         return redirect()->route('cbt.admin')->with('status', "Status token Exambro diubah menjadi {$statusLabel}.");
+    }
+
+    public function generateExambroApiKey(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        try {
+            $newKey = 'exb_' . bin2hex(random_bytes(24));
+        } catch (\Throwable $e) {
+            $newKey = 'exb_' . Str::lower(Str::random(48));
+        }
+
+        Cache::forever('exambro_api_key', $newKey);
+
+        return redirect()->route('cbt.admin')->with('status', 'API key Exambro berhasil digenerate ulang.');
+    }
+
+    public function generateExambroToken(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $cbtToken = strtoupper((string) $this->getInfoFromGarudaCbt()->cbt_token);
+        $newToken = '';
+
+        for ($i = 0; $i < 10; $i++) {
+            $candidate = (string) random_int(100000, 999999);
+            if ($candidate !== $cbtToken) {
+                $newToken = $candidate;
+                break;
+            }
+        }
+
+        if ($newToken === '') {
+            $newToken = strtoupper(Str::substr(Str::random(8), 0, 6));
+        }
+
+        $this->storeExambroToken($newToken);
+
+        return redirect()->route('cbt.admin')->with('status', 'PIN Exambro berhasil digenerate dan dipisahkan dari token soal.');
+    }
+
+    public function toggleExambroWarning(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $currentValue = $this->getExambroWarningValue();
+        $nextValue = $currentValue === 1 ? 0 : 1;
+
+        Cache::forever('exambro_warning_active', $nextValue);
+
+        return redirect()->route('cbt.admin')->with('status', 'Pengaturan peringatan Exambro diubah menjadi ' . ($nextValue === 1 ? 'ON (1)' : 'OFF (0)') . '.');
+    }
+
+    public function toggleExambroTokenVisibilityForPage(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $currentValue = $this->isExambroTokenVisibleOnPage();
+        $nextValue = $currentValue ? 0 : 1;
+
+        Cache::forever('exambro_show_pin_on_page', $nextValue);
+
+        return redirect()->route('cbt.admin')->with('status', 'Tampilan PIN Exambro di halaman Exambro diubah menjadi ' . ($nextValue === 1 ? 'TAMPIL' : 'SEMBUNYI') . '.');
+    }
+
+    public function downloadExambroApiConfig(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $apiKey  = $this->getExambroApiKey();
+        $pageUrl = route('cbt.exambro.page', ['key' => $apiKey]);
+
+        $payload = [
+            'api_key'          => $apiKey,
+            'exambro_page_url' => $pageUrl,
+            'exambro_token'    => $this->getExambroToken(),
+            'school'           => $this->getInfoFromGarudaCbt()->school,
+            'app_name'         => $this->getInfoFromGarudaCbt()->app_name,
+            'application_name' => $this->getInfoFromGarudaCbt()->app_name,
+            'nama_aplikasi'    => $this->getInfoFromGarudaCbt()->app_name,
+        ];
+
+        $fileName = 'exambro-api-config-' . now()->format('Ymd-His') . '.json';
+        $json     = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        return response($json, 200, [
+            'Content-Type'        => 'application/json; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Cache-Control'       => 'no-store, no-cache, must-revalidate',
+            'Pragma'              => 'no-cache',
+            'Expires'             => '0',
+        ]);
+    }
+
+    public function downloadExambroApiConfigForApp(Request $request)
+    {
+        $apiKey  = $this->getExambroApiKey();
+        $pageUrl = route('cbt.exambro.page', ['key' => $apiKey]);
+
+        $payload = [
+            'api_key'          => $apiKey,
+            'exambro_page_url' => $pageUrl,
+            'exambro_token'    => $this->getExambroToken(),
+            'school'           => $this->getInfoFromGarudaCbt()->school,
+            'app_name'         => $this->getInfoFromGarudaCbt()->app_name,
+            'application_name' => $this->getInfoFromGarudaCbt()->app_name,
+            'nama_aplikasi'    => $this->getInfoFromGarudaCbt()->app_name,
+        ];
+
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        return response($json, 200, [
+            'Content-Type'        => 'application/json; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="config.json"',
+            'Cache-Control'       => 'no-store, no-cache, must-revalidate',
+            'Pragma'              => 'no-cache',
+            'Expires'             => '0',
+        ]);
+    }
+
+    private function isExambroActive(): bool
+    {
+        $raw = Cache::get('exambro_token_active', false);
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
+        if (is_int($raw) || is_float($raw)) {
+            return (int) $raw === 1;
+        }
+
+        if (is_string($raw)) {
+            $normalized = strtolower(trim($raw));
+
+            return in_array($normalized, ['1', 'true', 'yes', 'on', 'active', 'aktif'], true);
+        }
+
+        return (bool) $raw;
+    }
+
+    private function getExambroApiKey(): string
+    {
+        // Cache adalah sumber utama (hasil generate dari panel admin)
+        $cachedKey = (string) Cache::get('exambro_api_key', '');
+        if ($cachedKey !== '') {
+            return $cachedKey;
+        }
+
+        // Fallback ke .env hanya jika belum pernah generate
+        return (string) config('app.exambro_api_key', '');
+    }
+
+    private function getExambroToken(): string
+    {
+        $fileToken = $this->readExambroTokenFromFile();
+        if ($fileToken !== '') {
+            return $fileToken;
+        }
+
+        return strtoupper((string) config('app.exambro_token_pin', ''));
+    }
+
+    private function getExambroTokenSource(): string
+    {
+        return $this->readExambroTokenFromFile() !== '' ? 'web' : 'env';
+    }
+
+    private function exambroTokenFilePath(): string
+    {
+        return storage_path('app/private/exambro-token.json');
+    }
+
+    private function readExambroTokenFromFile(): string
+    {
+        $path = $this->exambroTokenFilePath();
+
+        if (! File::exists($path)) {
+            return '';
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            return '';
+        }
+
+        $token = trim((string) ($decoded['token'] ?? ''));
+
+        return strtoupper($token);
+    }
+
+    private function storeExambroToken(string $token): void
+    {
+        $path = $this->exambroTokenFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        File::put($path, json_encode([
+            'token' => strtoupper(trim($token)),
+            'generated_at' => now()->toIso8601String(),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    public function activeExambroApiKey(): string
+    {
+        return $this->getExambroApiKey();
+    }
+
+    private function getExambroWarningValue(): int
+    {
+        $raw = Cache::get('exambro_warning_active', 1);
+
+        if (is_int($raw) || is_float($raw)) {
+            return ((int) $raw) === 1 ? 1 : 0;
+        }
+
+        if (is_bool($raw)) {
+            return $raw ? 1 : 0;
+        }
+
+        if (is_string($raw)) {
+            $normalized = strtolower(trim($raw));
+
+            return in_array($normalized, ['1', 'true', 'yes', 'on', 'active', 'aktif'], true) ? 1 : 0;
+        }
+
+        return 0;
+    }
+
+    private function isExambroTokenVisibleOnPage(): bool
+    {
+        $raw = Cache::get('exambro_show_pin_on_page', 1);
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
+        if (is_int($raw) || is_float($raw)) {
+            return (int) $raw === 1;
+        }
+
+        if (is_string($raw)) {
+            $normalized = strtolower(trim($raw));
+
+            return in_array($normalized, ['1', 'true', 'yes', 'on', 'active', 'aktif'], true);
+        }
+
+        return false;
     }
 
     private function getInfoFromGarudaCbt(): object
@@ -268,11 +676,14 @@ class CbtInfoController extends Controller
 
         return (object) [
             'token' => $tokenData->token ?? 'BELUM-DISET',
+            'cbt_token' => $tokenData->token ?? 'BELUM-DISET',
+            'exambro_token' => $this->getExambroToken(),
             'cbt_url' => $settingData->web ?? config('app.url'),
             'cbt_backup_url_1' => Cache::get('cbt_backup_url_1', $settingData->web ?? config('app.url')),
             'cbt_backup_url_2' => Cache::get('cbt_backup_url_2', $settingData->web ?? config('app.url')),
             'description' => $settingData->alamat ?? 'Silakan perbarui token dan URL CBT melalui halaman admin.',
             'school' => $settingData->sekolah ?? 'GARUDA CBT',
+            'app_name' => $settingData->nama_aplikasi ?? 'GARUDA CBT',
             'token_updated_at' => $tokenUpdatedAt ? now()->parse($tokenUpdatedAt)->format('d-m-Y H:i:s') : null,
             'token_valid_until' => $tokenValidUntil,
         ];
@@ -283,17 +694,17 @@ class CbtInfoController extends Controller
         $servers = [
             [
                 'key' => 'primary',
-                'name' => 'URL Utama',
+                'name' => 'Server Utama',
                 'url' => $info->cbt_url,
             ],
             [
                 'key' => 'backup1',
-                'name' => 'URL Backup 1',
+                'name' => 'Server 1',
                 'url' => $info->cbt_backup_url_1,
             ],
             [
                 'key' => 'backup2',
-                'name' => 'URL Backup 2',
+                'name' => 'Server 2',
                 'url' => $info->cbt_backup_url_2,
             ],
         ];
@@ -361,6 +772,20 @@ class CbtInfoController extends Controller
 
     private function apiJson(array $payload)
     {
+        $appName = (string) ($this->getInfoFromGarudaCbt()->app_name ?? 'GARUDA CBT');
+
+        if (! array_key_exists('app_name', $payload)) {
+            $payload['app_name'] = $appName;
+        }
+
+        if (! array_key_exists('application_name', $payload)) {
+            $payload['application_name'] = $appName;
+        }
+
+        if (! array_key_exists('nama_aplikasi', $payload)) {
+            $payload['nama_aplikasi'] = $appName;
+        }
+
         return response()
             ->json($payload)
             ->withHeaders([
