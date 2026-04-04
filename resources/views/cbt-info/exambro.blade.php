@@ -547,17 +547,17 @@
             animation: slideIn 0.3s ease;
         }
 
-        .server-card:hover:not([disabled]) {
+        .server-card:hover:not(.is-disabled) {
             transform: translateY(-3px);
             border-color: #9cb4da;
             box-shadow: 0 10px 28px rgba(42, 58, 88, 0.12);
         }
 
-        .server-card:active:not([disabled]) {
+        .server-card:active:not(.is-disabled) {
             transform: translateY(-2px);
         }
 
-        .server-card[disabled] {
+        .server-card.is-disabled {
             cursor: not-allowed;
             opacity: 0.6;
             pointer-events: none;
@@ -651,6 +651,117 @@
             gap: 6px;
         }
 
+        .monitor-gauge {
+            margin-bottom: 10px;
+            padding: 10px 10px 8px;
+            border: 1px solid #d9e2ef;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        }
+
+        .gauge-shell {
+            position: relative;
+            width: 146px;
+            height: 78px;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+
+        .gauge-threshold {
+            position: absolute;
+            bottom: 18px;
+            font-size: 0.6rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: #64748b;
+            z-index: 2;
+        }
+
+        .gauge-threshold.warn {
+            left: 84px;
+            color: #a16207;
+        }
+
+        .gauge-threshold.danger {
+            right: 10px;
+            color: #b91c1c;
+        }
+
+        .gauge-arc {
+            position: absolute;
+            inset: 0;
+            border-radius: 146px 146px 0 0;
+            background: conic-gradient(
+                from 180deg,
+                #0fca34 0deg 72deg,
+                #16a34a 72deg 126deg,
+                #ffea00 126deg 162deg,
+                #f97316 162deg 171deg,
+                #f31212 171deg 180deg
+            );
+        }
+
+        .gauge-arc::after {
+            content: '';
+            position: absolute;
+            left: 22px;
+            right: 22px;
+            top: 22px;
+            bottom: -22px;
+            border-radius: 120px 120px 0 0;
+            background: #f7fafc;
+        }
+
+        .gauge-needle {
+            position: absolute;
+            left: 50%;
+            bottom: 4px;
+            width: 4px;
+            height: 60px;
+            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+            border-radius: 999px;
+            transform-origin: 50% calc(100% - 6px);
+            transform: translateX(-50%) rotate(-90deg);
+            box-shadow: 0 1px 6px rgba(15, 23, 42, 0.2);
+            transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .gauge-cap {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            background: #111827;
+            border: 4px solid #e2e8f0;
+            transform: translateX(-50%);
+        }
+
+        .gauge-readout {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .gauge-percent {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #1f2937;
+            font-variant-numeric: tabular-nums;
+            transition: color 240ms ease, transform 240ms ease;
+        }
+
+        .gauge-caption {
+            font-size: 0.72rem;
+            color: #64748b;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
         .monitor-item {
             display: flex;
             align-items: center;
@@ -721,10 +832,49 @@
         }
 
         .status-meta {
-            margin-top: 4px;
+            margin-top: 6px;
             color: #6d7b92;
             font-size: 0.75rem;
             font-weight: 600;
+        }
+
+        .server-action {
+            margin-top: 10px;
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 9px;
+            padding: 9px 12px;
+            font-size: 0.82rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 6px 14px rgba(37, 99, 235, 0.2);
+        }
+
+        .server-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
+        }
+
+        .server-action.proxy {
+            background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%);
+            box-shadow: 0 6px 14px rgba(220, 38, 38, 0.24);
+        }
+
+        .server-action:active {
+            transform: translateY(0);
+        }
+
+        .server-action[disabled] {
+            background: #cbd5e1;
+            color: #64748b;
+            cursor: not-allowed;
+            box-shadow: none;
         }
 
         .footer {
@@ -810,7 +960,7 @@
                                 <div class="settings-item">
                                     <label class="settings-label">Refresh Interval</label>
                                     <div class="interval-control">
-                                        <input type="number" id="interval-input" class="interval-input" value="20" min="5" max="120">
+                                        <input type="number" id="interval-input" class="interval-input" value="15" min="5" max="120">
                                         <span style="font-size: 0.8rem;">sec</span>
                                     </div>
                                 </div>
@@ -908,7 +1058,7 @@
     </main>
 
     <template id="server-card-template">
-        <button type="button" class="server-card">
+        <div class="server-card" role="button" tabindex="0">
             <div class="server-main">
                 <div class="server-icon"></div>
                 <div class="server-info">
@@ -918,6 +1068,19 @@
             </div>
             <div class="server-side monitor-box">
                 <p class="monitor-title">Monitoring CBT</p>
+                <div class="monitor-gauge">
+                    <div class="gauge-shell">
+                        <div class="gauge-arc"></div>
+                        <span class="gauge-threshold warn">70%</span>
+                        <span class="gauge-threshold danger">90%</span>
+                        <div class="gauge-needle js-gauge-needle"></div>
+                        <div class="gauge-cap"></div>
+                    </div>
+                    <div class="gauge-readout">
+                        <span class="gauge-caption">Beban Server</span>
+                        <span class="gauge-percent js-gauge-percent">0%</span>
+                    </div>
+                </div>
                 <ul class="monitor-list">
                     <li class="monitor-item">
                         <span class="monitor-label">Status Server</span>
@@ -937,8 +1100,9 @@
                     </li>
                 </ul>
                 <p class="status-meta"></p>
+                <button type="button" class="server-action js-server-action">Pilih Server</button>
             </div>
-        </button>
+        </div>
     </template>
 
     <template id="skeleton-template">
@@ -986,7 +1150,8 @@
             apiKey: resolvedApiKey,
             apiBase: '{{ url("api/exambro-info") }}',
             connectBase: '{{ url("exambro/connect") }}',
-            refreshInterval: 20000,
+            reverseProxyBase: '{{ route("cbt.lb") }}',
+            refreshInterval: 900000,
             autoRefresh: true,
             parseTokenStatus: parseTokenStatusValue,
             parseWarningStatus: parseWarningStatusValue
@@ -1040,9 +1205,10 @@
         }
 
         function locationFromCountryCode(code) {
-            if (code === 'ID') return 'Jakarta';
+            if (code === 'ID') return 'Indonesia';
             if (code === 'LAN') return 'Lokal';
-            if (code === 'IP') return 'Global';
+            if (code === 'IP') return 'IP Publik';
+            if (code === 'INT') return 'Internet';
             if (!code || code === '--') return '-';
             return code;
         }
@@ -1051,6 +1217,28 @@
             if (key === 'high') return 'Tinggi';
             if (key === 'medium') return 'Sedang';
             return 'Normal';
+        }
+
+        function clampPercent(value) {
+            return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+        }
+
+        function calculateLoadPercent(loginCount, capacity) {
+            const safeCapacity = Math.max(1, Number(capacity || 1));
+            return clampPercent((Number(loginCount || 0) / safeCapacity) * 100);
+        }
+
+        function buildKeyQuery() {
+            return config.apiKey ? ('?key=' + encodeURIComponent(config.apiKey)) : '';
+        }
+
+        function connectToServer(serverKey, useReverseProxy) {
+            if (useReverseProxy) {
+                window.location.href = config.reverseProxyBase + buildKeyQuery();
+                return;
+            }
+
+            window.location.href = config.connectBase + '/' + encodeURIComponent(serverKey) + buildKeyQuery();
         }
 
         function createAlert(type, message) {
@@ -1251,9 +1439,9 @@
                     loginIndicatorLabel: s.login_indicator_label || 'Rendah'
                 }))
                 : [
-                    { key: 'primary', label: 'Server Utama', url: data.server_utama, status: data.server_utama_status, selectable: data.server_utama_status === 'up' && !!data.server_utama, countryCode: '--', core: 4, ram: '8 GB', capacity: 40, loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
-                    { key: 'backup1', label: 'Server 2', url: data.server_backup1, status: data.server_backup1_status, selectable: data.server_backup1_status === 'up' && !!data.server_backup1, countryCode: '--', core: 4, ram: '8 GB', capacity: 40, loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
-                    { key: 'backup2', label: 'Server 3', url: data.server_backup2, status: data.server_backup2_status, selectable: data.server_backup2_status === 'up' && !!data.server_backup2, countryCode: '--', core: 4, ram: '8 GB', capacity: 40, loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' }
+                    { key: 'primary', label: 'Server Utama', url: data.server_utama, status: data.server_utama_status, selectable: data.server_utama_status === 'up' && !!data.server_utama, countryCode: '--', core: 4, ram: '8 GB', capacity: Number(data.server_utama_capacity || 40), loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
+                    { key: 'backup1', label: 'Server 2', url: data.server_backup1, status: data.server_backup1_status, selectable: data.server_backup1_status === 'up' && !!data.server_backup1, countryCode: '--', core: 4, ram: '8 GB', capacity: Number(data.server_backup1_capacity || 40), loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
+                    { key: 'backup2', label: 'Server 3', url: data.server_backup2, status: data.server_backup2_status, selectable: data.server_backup2_status === 'up' && !!data.server_backup2, countryCode: '--', core: 4, ram: '8 GB', capacity: Number(data.server_backup2_capacity || 40), loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' }
                 ];
 
             servers.forEach((server, idx) => {
@@ -1273,32 +1461,84 @@
                 const lokasiServerEl = card.querySelector('.js-lokasi-server');
                 const pesertaLoginEl = card.querySelector('.js-peserta-login');
                 const indikatorEl = card.querySelector('.js-indikator-cbt');
+                const gaugeNeedleEl = card.querySelector('.js-gauge-needle');
+                const gaugePercentEl = card.querySelector('.js-gauge-percent');
+                const serverActionEl = card.querySelector('.js-server-action');
 
                 const capacity = Math.max(1, Number(server.capacity || 40));
-                const pesertaText = server.loginCount + ' / ' + capacity;
+                const loadPercent = calculateLoadPercent(server.loginCount, capacity);
+                const pesertaText = server.loginCount + ' / ' + capacity + ' (' + loadPercent + '%)';
                 const indikatorKey = server.loginIndicator || 'low';
                 const indikatorLabel = indicatorLabelFromKey(indikatorKey);
+                const loadClass = indikatorKey === 'high' ? 'high' : (indikatorKey === 'medium' ? 'medium' : 'normal');
+                const useReverseProxy = loadPercent >= 90;
 
                 statusServerEl.textContent = isOnline ? 'Online' : 'Down';
                 statusServerEl.className = 'monitor-value js-status-server ' + (isOnline ? 'normal' : 'down');
 
                 lokasiServerEl.textContent = locationFromCountryCode(server.countryCode);
                 pesertaLoginEl.textContent = pesertaText;
+                pesertaLoginEl.className = 'monitor-value js-peserta-login ' + loadClass;
 
                 indikatorEl.textContent = indikatorLabel;
-                indikatorEl.className = 'monitor-value js-indikator-cbt ' + (indikatorKey === 'high' ? 'high' : (indikatorKey === 'medium' ? 'medium' : 'normal'));
+                indikatorEl.className = 'monitor-value js-indikator-cbt ' + loadClass;
 
-                statusMeta.textContent = isOnline ? 'Ketuk untuk terhubung' : 'Server tidak tersedia';
+                if (gaugeNeedleEl) {
+                    gaugeNeedleEl.style.transform = 'translateX(-50%) rotate(' + (-90 + (loadPercent * 1.8)) + 'deg)';
+                }
+
+                if (gaugePercentEl) {
+                    gaugePercentEl.textContent = loadPercent + '%';
+                    gaugePercentEl.className = 'gauge-percent js-gauge-percent';
+                    gaugePercentEl.style.transform = 'scale(1.04)';
+                    window.requestAnimationFrame(() => {
+                        gaugePercentEl.style.transform = 'scale(1)';
+                    });
+                    if (loadClass === 'high') {
+                        gaugePercentEl.style.color = '#dc2626';
+                    } else if (loadClass === 'medium') {
+                        gaugePercentEl.style.color = '#ca8a04';
+                    } else {
+                        gaugePercentEl.style.color = '#15803d';
+                    }
+                }
+
+                statusMeta.textContent = isOnline
+                    ? (useReverseProxy
+                        ? ('Beban ' + loadPercent + '%: koneksi akan dialihkan via reverse proxy')
+                        : ('Beban ' + loadPercent + '% dari kapasitas maksimum'))
+                    : 'Server tidak tersedia';
                 statusMeta.style.color = isOnline ? '#475569' : '#dc2626';
 
                 const selectable = isOnline && !!server.url && server.selectable !== false;
                 if (!selectable) {
-                    card.setAttribute('disabled', 'disabled');
-                    card.disabled = true;
+                    card.classList.add('is-disabled');
+                    card.setAttribute('aria-disabled', 'true');
+                    card.tabIndex = -1;
+                    if (serverActionEl) {
+                        serverActionEl.disabled = true;
+                        serverActionEl.textContent = isOnline ? 'Server Tidak Tersedia' : 'Server Offline';
+                    }
                 } else {
+                    if (serverActionEl) {
+                        serverActionEl.textContent = useReverseProxy ? ('Masuk via Proxy - ' + server.label) : ('Masuk - ' + server.label);
+                        serverActionEl.classList.toggle('proxy', useReverseProxy);
+                        serverActionEl.addEventListener('click', (event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            connectToServer(server.key, useReverseProxy);
+                        });
+                    }
+
                     card.addEventListener('click', () => {
-                        const keyQuery = config.apiKey ? ('?key=' + encodeURIComponent(config.apiKey)) : '';
-                        window.location.href = config.connectBase + '/' + encodeURIComponent(server.key) + keyQuery;
+                        connectToServer(server.key, useReverseProxy);
+                    });
+
+                    card.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            connectToServer(server.key, useReverseProxy);
+                        }
                     });
                 }
 

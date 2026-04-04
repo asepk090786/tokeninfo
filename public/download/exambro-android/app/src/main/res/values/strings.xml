@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Exambro Client</string>
+    <string name="btn_save">Simpan &amp; Mulai Ujian</string>
+    <string name="btn_retry">Coba Lagi</string>
+    <string name="btn_reset">Reset ke Default</string>
+    <string name="hint_server_url">URL Server</string>
+    <string name="hint_api_key">API Key Exambro</string>
+    <string name="hint_exit_pin">PIN Keluar</string>
+    <string name="label_lock_mode">Mode Kunci (Anti-Contek)</string>
+    <string name="msg_exit_pin_dialog">Masukkan PIN pengawas untuk membuka opsi keluar</string>
+    <string name="msg_wrong_pin">PIN salah!</string>
+</resources>

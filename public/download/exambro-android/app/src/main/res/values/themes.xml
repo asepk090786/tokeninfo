@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme – no ActionBar -->
+    <style name="Theme.ExambroClient" parent="Theme.MaterialComponents.DayOnly.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryVariant">@color/accent_dark</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
+    <!-- Setup activity uses light background -->
+    <style name="Theme.ExambroClient.Setup" parent="Theme.MaterialComponents.DayOnly.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryVariant">@color/accent_dark</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="android:windowBackground">#f1f5f9</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

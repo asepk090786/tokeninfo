@@ -53,6 +53,10 @@ class CbtInfoController extends Controller
             return redirect()->route('cbt.exambro.page', ['key' => (string) $request->query('key', '')]);
         }
 
+        if ($this->isServerHighLoad($server)) {
+            return redirect()->route('cbt.lb', ['key' => (string) $request->query('key', '')]);
+        }
+
         $this->increaseServerLoginCount((string) $server['key']);
 
         return redirect()->away($targetUrl);
@@ -213,14 +217,17 @@ class CbtInfoController extends Controller
             /* ── Server Utama ───────────────────────────────── */
             'server_utama'        => $primary['url'] ?? null,
             'server_utama_status' => ($primary['is_up'] ?? false) ? 'up' : 'down',
+            'server_utama_capacity' => (int) ($primary['capacity'] ?? 0),
 
             /* ── Server Backup 1 ────────────────────────────── */
             'server_backup1'        => $backup1['url'] ?? null,
             'server_backup1_status' => ($backup1['is_up'] ?? false) ? 'up' : 'down',
+            'server_backup1_capacity' => (int) ($backup1['capacity'] ?? 0),
 
             /* ── Server Backup 2 ────────────────────────────── */
             'server_backup2'        => $backup2['url'] ?? null,
             'server_backup2_status' => ($backup2['is_up'] ?? false) ? 'up' : 'down',
+            'server_backup2_capacity' => (int) ($backup2['capacity'] ?? 0),
 
             /* ── Server Rekomendasi (pertama yang UP) ───────── */
             'server_recommended'    => $recommended['url'] ?? null,
@@ -1053,6 +1060,25 @@ class CbtInfoController extends Controller
 
     private function selectAvailableServer(array $servers): array
     {
+        $preferredServers = array_values(array_filter($servers, function ($server) {
+            return (($server['is_up'] ?? false) === true)
+                && ! empty($server['url'])
+                && ! $this->isServerHighLoad((array) $server);
+        }));
+
+        if ($preferredServers !== []) {
+            usort($preferredServers, function ($left, $right) {
+                $leftCapacity = max(1, (int) ($left['capacity'] ?? 1));
+                $rightCapacity = max(1, (int) ($right['capacity'] ?? 1));
+                $leftRatio = max(0, (int) ($left['login_count'] ?? 0)) / $leftCapacity;
+                $rightRatio = max(0, (int) ($right['login_count'] ?? 0)) / $rightCapacity;
+
+                return $leftRatio <=> $rightRatio;
+            });
+
+            return $preferredServers[0];
+        }
+
         foreach ($servers as $server) {
             if (($server['is_up'] ?? false) === true && ! empty($server['url'])) {
                 return $server;
@@ -1143,15 +1169,23 @@ class CbtInfoController extends Controller
         $capacity = max(1, $capacity);
         $ratio = $count / $capacity;
 
-        if ($ratio >= 0.85) {
+        if ($ratio >= 0.9) {
             return ['key' => 'high', 'label' => 'Tinggi'];
         }
 
-        if ($ratio >= 0.5) {
+        if ($ratio >= 0.7) {
             return ['key' => 'medium', 'label' => 'Sedang'];
         }
 
         return ['key' => 'low', 'label' => 'Rendah'];
+    }
+
+    private function isServerHighLoad(array $server): bool
+    {
+        $capacity = max(1, (int) ($server['capacity'] ?? 1));
+        $loginCount = max(0, (int) ($server['login_count'] ?? 0));
+
+        return ($loginCount / $capacity) >= 0.9;
     }
 
     private function extractCountryCodeFromUrl(?string $url): string

@@ -568,6 +568,78 @@
             color: #6b7280;
             word-break: break-all;
         }
+
+        .summary-stats {
+            margin-top: 10px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .summary-stat-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.78rem;
+        }
+
+        .summary-stat-label {
+            font-weight: 700;
+            color: #475569;
+        }
+
+        .summary-load-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 88px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .summary-load-badge.low {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .summary-load-badge.medium {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .summary-load-badge.high {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .summary-gauge {
+            position: relative;
+            height: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: linear-gradient(90deg, #22c55e 0% 70%, #fde047 70% 90%, #ef4444 90% 100%);
+        }
+
+        .summary-gauge-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: var(--load-percent, 0%);
+            background: rgba(15, 23, 42, 0.16);
+        }
+
+        .summary-gauge-marker {
+            position: absolute;
+            top: -3px;
+            bottom: -3px;
+            width: 3px;
+            left: calc(var(--load-percent, 0%) - 1px);
+            background: #111827;
+            border-radius: 999px;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+        }
     </style>
 </head>
 <body>
@@ -860,6 +932,11 @@
                                 $statusLabel = $isUp ? ($isPrimary ? 'AKTIF' : 'SIAGA') : 'OFFLINE';
                                 $summClass   = $isUp ? ($isPrimary ? 'summary-aktif' : 'summary-siaga') : 'summary-offline';
                                 $roleLabel   = $isPrimary ? 'Utama' : 'Backup ' . $idx;
+                                $capacity    = max(1, (int) ($server['capacity'] ?? 1));
+                                $loginCount  = max(0, (int) ($server['login_count'] ?? 0));
+                                $loadPercent = (int) round(($loginCount / $capacity) * 100);
+                                $loadClass   = $server['login_indicator'] ?? 'low';
+                                $loadLabel   = $server['login_indicator_label'] ?? 'Rendah';
                             @endphp
                             <div class="summary-item {{ $summClass }}">
                                 <div class="summary-row">
@@ -867,6 +944,20 @@
                                     <span class="summary-badge badge-{{ strtolower($statusLabel) }}">{{ $statusLabel }}</span>
                                 </div>
                                 <p class="summary-url">{{ $server['url'] }}</p>
+                                <div class="summary-stats">
+                                    <div class="summary-stat-row">
+                                        <span class="summary-stat-label">Peserta Login</span>
+                                        <span class="summary-load-badge {{ $loadClass }}">{{ $loginCount }} / {{ $capacity }} ({{ $loadPercent }}%)</span>
+                                    </div>
+                                    <div class="summary-stat-row">
+                                        <span class="summary-stat-label">Indikator CBT</span>
+                                        <span class="summary-load-badge {{ $loadClass }}">{{ $loadLabel }}</span>
+                                    </div>
+                                    <div class="summary-gauge" style="--load-percent: {{ max(0, min(100, $loadPercent)) }}%;">
+                                        <div class="summary-gauge-fill"></div>
+                                        <div class="summary-gauge-marker"></div>
+                                    </div>
+                                </div>
                             </div>
                         @endforeach
                     </div>
