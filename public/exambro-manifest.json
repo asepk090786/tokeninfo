@@ -1,0 +1,47 @@
+{
+  "id": "/exambro",
+  "name": "Exambro Dashboard",
+  "short_name": "Exambro",
+  "description": "Portal Exambro untuk memilih server ujian CBT.",
+  "start_url": "/exambro?source=pwa",
+  "scope": "/exambro",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#dde1e8",
+  "theme_color": "#3f7de8",
+  "lang": "id-ID",
+  "icons": [
+    {
+      "src": "/pwa/exambro-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/exambro-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/exambro-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/exambro-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Buka Exambro",
+      "short_name": "Exambro",
+      "url": "/exambro"
+    }
+  ]
+}

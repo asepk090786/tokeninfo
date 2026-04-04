@@ -372,6 +372,201 @@
                 width: 100%;
                 text-align: center;
             }
+
+            .svr-grid,
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ===== Server Config Dark Cards ===== */
+        .svr-section {
+            margin-top: 16px;
+            background: #111827;
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .svr-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .svr-card {
+            background: #1e293b;
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 0;
+        }
+
+        .svr-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: #162032;
+            border-bottom: 1px solid #2d3748;
+        }
+
+        .svr-head-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .svr-icon { font-size: 1.1rem; }
+
+        .svr-num {
+            font-weight: 700;
+            color: #f1f5f9;
+            font-size: 0.95rem;
+        }
+
+        .svr-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .dot-green  { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.55); }
+        .dot-orange { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,.55); }
+        .dot-gray   { background: #6b7280; }
+
+        .svr-body {
+            padding: 14px;
+            flex: 1;
+        }
+
+        .svr-field { margin-bottom: 10px; }
+
+        .svr-label {
+            display: block;
+            font-size: 0.81rem;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 5px;
+        }
+
+        .svr-input {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: #e2e8f0;
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color 120ms ease, box-shadow 120ms ease;
+        }
+
+        .svr-input:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56,189,248,.15);
+        }
+
+        .svr-advanced { margin-top: 4px; }
+
+        .svr-adv-toggle {
+            font-size: 0.80rem;
+            color: #64748b;
+            cursor: pointer;
+            margin-bottom: 8px;
+            user-select: none;
+            list-style: none;
+        }
+
+        .svr-adv-toggle:hover { color: #94a3b8; }
+
+        .svr-btn {
+            width: 100%;
+            border: 0;
+            border-radius: 0;
+            padding: 11px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            transition: opacity 150ms;
+            margin: 0;
+        }
+
+        .svr-btn:hover { opacity: 0.88; }
+        .svr-btn-green  { background: #16a34a; }
+        .svr-btn-orange { background: #b45309; }
+        .svr-btn-dark   { background: #1f2937; }
+
+        /* Summary */
+        .svr-summary {
+            margin-top: 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .summary-title {
+            margin: 0 0 12px;
+            font-size: 0.95rem;
+            color: #1f2937;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .summary-item {
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: 1px solid;
+        }
+
+        .summary-aktif   { background: #f0fdf4; border-color: #86efac; }
+        .summary-siaga   { background: #fffbeb; border-color: #fcd34d; }
+        .summary-offline { background: #f9fafb; border-color: #e5e7eb; }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .summary-name {
+            font-size: 0.83rem;
+            font-weight: 700;
+            color: #1f2937;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .summary-badge {
+            font-size: 0.69rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .badge-aktif   { background: #dcfce7; color: #15803d; }
+        .badge-siaga   { background: #fffbeb; color: #b45309; }
+        .badge-offline { background: #f3f4f6; color: #6b7280; }
+
+        .summary-url {
+            margin: 6px 0 0;
+            font-size: 0.78rem;
+            color: #6b7280;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -396,6 +591,10 @@
                 <button class="menu-btn" data-target="panel-web" type="button">
                     Pengaturan WEB
                     <small>Server utama/backup yang tampil di halaman home</small>
+                </button>
+                <button class="menu-btn" data-target="panel-user-agent" type="button">
+                    Pengaturan User-Agent
+                    <small>Deteksi Exambro berdasarkan User-Agent client</small>
                 </button>
             </nav>
 
@@ -517,6 +716,18 @@
                         <input type="hidden" name="primary_url" value="{{ old('primary_url', $info->cbt_url) }}">
                         <input type="hidden" name="backup_url_1" value="{{ old('backup_url_1', $info->cbt_backup_url_1) }}">
                         <input type="hidden" name="backup_url_2" value="{{ old('backup_url_2', $info->cbt_backup_url_2) }}">
+                        <input type="hidden" name="server_name_primary" value="{{ old('server_name_primary', $info->server_name_primary ?? 'Server Utama') }}">
+                        <input type="hidden" name="server_name_backup_1" value="{{ old('server_name_backup_1', $info->server_name_backup_1 ?? 'Server 1') }}">
+                        <input type="hidden" name="server_name_backup_2" value="{{ old('server_name_backup_2', $info->server_name_backup_2 ?? 'Server 2') }}">
+                        <input type="hidden" name="primary_core" value="{{ old('primary_core', $info->server_primary_core ?? 4) }}">
+                        <input type="hidden" name="backup1_core" value="{{ old('backup1_core', $info->server_backup1_core ?? 4) }}">
+                        <input type="hidden" name="backup2_core" value="{{ old('backup2_core', $info->server_backup2_core ?? 4) }}">
+                        <input type="hidden" name="primary_ram" value="{{ old('primary_ram', $info->server_primary_ram ?? '8 GB') }}">
+                        <input type="hidden" name="backup1_ram" value="{{ old('backup1_ram', $info->server_backup1_ram ?? '8 GB') }}">
+                        <input type="hidden" name="backup2_ram" value="{{ old('backup2_ram', $info->server_backup2_ram ?? '8 GB') }}">
+                        <input type="hidden" name="primary_capacity" value="{{ old('primary_capacity', $info->server_primary_capacity ?? 40) }}">
+                        <input type="hidden" name="backup1_capacity" value="{{ old('backup1_capacity', $info->server_backup1_capacity ?? 40) }}">
+                        <input type="hidden" name="backup2_capacity" value="{{ old('backup2_capacity', $info->server_backup2_capacity ?? 40) }}">
                         <input type="hidden" name="description" value="{{ old('description', $info->description) }}">
                         <div class="btn-row">
                             <button class="btn-primary" type="submit">Simpan Token CBT</button>
@@ -572,54 +783,154 @@
 
             <section id="panel-web" class="panel">
                 <h3>Pengaturan WEB</h3>
-                <p class="panel-desc">Atur token CBT, URL server utama/backup, dan deskripsi yang ditampilkan di halaman home.</p>
+                <p class="panel-desc">Kelola nama, URL, dan spesifikasi masing-masing server CBT.</p>
 
-                <article class="card">
-                    <h4>Form Server dan Konten Home</h4>
+                {{-- Server Cards --}}
+                <div class="svr-section">
+                    <div class="svr-grid">
+                        @foreach ($servers as $idx => $server)
+                            @php
+                                $isUp       = $server['status_class'] === 'up';
+                                $isPrimary  = $idx === 0;
+                                $dotClass   = $isUp ? ($isPrimary ? 'dot-green' : 'dot-orange') : 'dot-gray';
+                                $btnClass   = $isUp ? ($isPrimary ? 'svr-btn-green' : 'svr-btn-orange') : 'svr-btn-dark';
+                                $urlMap     = [$info->cbt_url, $info->cbt_backup_url_1, $info->cbt_backup_url_2];
+                                $nameMap    = [
+                                    $info->server_name_primary  ?? 'Server Utama',
+                                    $info->server_name_backup_1 ?? 'Server 1',
+                                    $info->server_name_backup_2 ?? 'Server 2',
+                                ];
+                                $coreMap    = [$info->server_primary_core ?? 4, $info->server_backup1_core ?? 4, $info->server_backup2_core ?? 4];
+                                $ramMap     = [$info->server_primary_ram  ?? '8 GB', $info->server_backup1_ram  ?? '8 GB', $info->server_backup2_ram  ?? '8 GB'];
+                                $capMap     = [$info->server_primary_capacity ?? 40, $info->server_backup1_capacity ?? 40, $info->server_backup2_capacity ?? 40];
+                            @endphp
+                            <form action="{{ route('cbt.server.update', $server['key']) }}" method="post" class="svr-card">
+                                @csrf
+                                <div class="svr-head">
+                                    <div class="svr-head-left">
+                                        <span class="svr-icon">🖥</span>
+                                        <span class="svr-num">Server {{ $idx + 1 }}</span>
+                                    </div>
+                                    <span class="svr-dot {{ $dotClass }}"></span>
+                                </div>
+                                <div class="svr-body">
+                                    <div class="svr-field">
+                                        <label class="svr-label">Nama Server</label>
+                                        <input class="svr-input" name="server_name" type="text" maxlength="60"
+                                               value="{{ $nameMap[$idx] }}" required>
+                                    </div>
+                                    <div class="svr-field">
+                                        <label class="svr-label">URL Server</label>
+                                        <input class="svr-input" name="server_url" type="url" maxlength="255"
+                                               value="{{ $urlMap[$idx] }}" required>
+                                    </div>
+                                    <details class="svr-advanced">
+                                        <summary class="svr-adv-toggle">⚙ Spesifikasi &amp; Kapasitas</summary>
+                                        <div class="svr-field">
+                                            <label class="svr-label">Core CPU</label>
+                                            <input class="svr-input" name="server_core" type="number" min="1" max="256"
+                                                   value="{{ $coreMap[$idx] }}" required>
+                                        </div>
+                                        <div class="svr-field">
+                                            <label class="svr-label">RAM</label>
+                                            <input class="svr-input" name="server_ram" type="text" maxlength="30"
+                                                   value="{{ $ramMap[$idx] }}" required>
+                                        </div>
+                                        <div class="svr-field">
+                                            <label class="svr-label">Kapasitas Peserta</label>
+                                            <input class="svr-input" name="server_capacity" type="number" min="1" max="100000"
+                                                   value="{{ $capMap[$idx] }}" required>
+                                        </div>
+                                    </details>
+                                </div>
+                                <button type="submit" class="svr-btn {{ $btnClass }}">💾 Simpan</button>
+                            </form>
+                        @endforeach
+                    </div>
+                </div>
+
+                {{-- Ringkasan Status Server --}}
+                <div class="svr-summary">
+                    <h4 class="summary-title">🏁 Ringkasan Status Server</h4>
+                    <div class="summary-grid">
+                        @foreach ($servers as $idx => $server)
+                            @php
+                                $isUp        = $server['status_class'] === 'up';
+                                $isPrimary   = $idx === 0;
+                                $statusLabel = $isUp ? ($isPrimary ? 'AKTIF' : 'SIAGA') : 'OFFLINE';
+                                $summClass   = $isUp ? ($isPrimary ? 'summary-aktif' : 'summary-siaga') : 'summary-offline';
+                                $roleLabel   = $isPrimary ? 'Utama' : 'Backup ' . $idx;
+                            @endphp
+                            <div class="summary-item {{ $summClass }}">
+                                <div class="summary-row">
+                                    <span class="summary-name">{{ $server['name'] }} – {{ $roleLabel }}</span>
+                                    <span class="summary-badge badge-{{ strtolower($statusLabel) }}">{{ $statusLabel }}</span>
+                                </div>
+                                <p class="summary-url">{{ $server['url'] }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+
+                {{-- Keterangan Halaman --}}
+                <article class="card" style="margin-top: 16px;">
+                    <h4>Keterangan Halaman Home</h4>
                     <form action="{{ route('cbt.update') }}" method="post">
                         @csrf
+                        <input type="hidden" name="token" value="{{ $info->token }}">
+                        <input type="hidden" name="primary_url" value="{{ $info->cbt_url }}">
+                        <input type="hidden" name="backup_url_1" value="{{ $info->cbt_backup_url_1 }}">
+                        <input type="hidden" name="backup_url_2" value="{{ $info->cbt_backup_url_2 }}">
+                        <input type="hidden" name="server_name_primary" value="{{ $info->server_name_primary ?? 'Server Utama' }}">
+                        <input type="hidden" name="server_name_backup_1" value="{{ $info->server_name_backup_1 ?? 'Server 1' }}">
+                        <input type="hidden" name="server_name_backup_2" value="{{ $info->server_name_backup_2 ?? 'Server 2' }}">
+                        <input type="hidden" name="primary_core" value="{{ $info->server_primary_core ?? 4 }}">
+                        <input type="hidden" name="backup1_core" value="{{ $info->server_backup1_core ?? 4 }}">
+                        <input type="hidden" name="backup2_core" value="{{ $info->server_backup2_core ?? 4 }}">
+                        <input type="hidden" name="primary_ram" value="{{ $info->server_primary_ram ?? '8 GB' }}">
+                        <input type="hidden" name="backup1_ram" value="{{ $info->server_backup1_ram ?? '8 GB' }}">
+                        <input type="hidden" name="backup2_ram" value="{{ $info->server_backup2_ram ?? '8 GB' }}">
+                        <input type="hidden" name="primary_capacity" value="{{ $info->server_primary_capacity ?? 40 }}">
+                        <input type="hidden" name="backup1_capacity" value="{{ $info->server_backup1_capacity ?? 40 }}">
+                        <input type="hidden" name="backup2_capacity" value="{{ $info->server_backup2_capacity ?? 40 }}">
                         <div class="field">
-                            <label for="token">Token CBT</label>
-                            <input id="token" name="token" type="password" value="{{ old('token', $info->token) }}" required>
-                        </div>
-
-                        <div class="field">
-                            <label for="primary_url">URL Server Utama</label>
-                            <input id="primary_url" name="primary_url" type="url" value="{{ old('primary_url', $info->cbt_url) }}" required>
-                        </div>
-
-                        <div class="field">
-                            <label for="backup_url_1">URL Server Backup 1</label>
-                            <input id="backup_url_1" name="backup_url_1" type="url" value="{{ old('backup_url_1', $info->cbt_backup_url_1) }}" required>
-                        </div>
-
-                        <div class="field">
-                            <label for="backup_url_2">URL Server Backup 2</label>
-                            <input id="backup_url_2" name="backup_url_2" type="url" value="{{ old('backup_url_2', $info->cbt_backup_url_2) }}" required>
-                        </div>
-
-                        <div class="field">
-                            <label for="description">Keterangan Halaman Home</label>
+                            <label for="description">Keterangan / Deskripsi Halaman</label>
                             <textarea id="description" name="description">{{ old('description', $info->description) }}</textarea>
                         </div>
-
                         <div class="btn-row">
-                            <button class="btn-primary" type="submit">Simpan Pengaturan WEB</button>
+                            <button class="btn-primary" type="submit">Simpan Keterangan</button>
                         </div>
                     </form>
                 </article>
+            </section>
 
-                <section class="server-grid">
-                    @foreach ($servers as $server)
-                        <article class="server-item">
-                            <p class="name">{{ $server['name'] }}</p>
-                            <p class="status {{ $server['status_class'] === 'up' ? 'status-up' : 'status-down' }}">
-                                {{ $server['status_label'] }}
-                            </p>
-                            <p style="margin: 6px 0 0; font-size: 0.82rem; color: var(--muted); word-break: break-all;">{{ $server['url'] }}</p>
-                        </article>
-                    @endforeach
-                </section>
+            <section id="panel-user-agent" class="panel">
+                <h3>Pengaturan User-Agent</h3>
+                <p class="panel-desc">Atur keyword User-Agent yang dianggap sebagai aplikasi Exambro untuk auto-redirect ke halaman Exambro.</p>
+
+                <article class="card">
+                    <h4>Deteksi Client Exambro</h4>
+                    <form action="{{ route('cbt.user-agent.update') }}" method="post">
+                        @csrf
+                        <div class="field" style="display: flex; align-items: center; gap: 10px;">
+                            <input id="user_agent_detection_enabled" name="user_agent_detection_enabled" type="checkbox" value="1" {{ $userAgentDetectionEnabled ? 'checked' : '' }} style="width: auto;">
+                            <label for="user_agent_detection_enabled" style="margin: 0;">Aktifkan deteksi User-Agent untuk redirect otomatis ke /exambro</label>
+                        </div>
+
+                        <div class="field">
+                            <label for="user_agent_patterns">Keyword User-Agent (satu baris satu keyword, contoh: exambro)</label>
+                            <textarea id="user_agent_patterns" name="user_agent_patterns" rows="6" required>{{ old('user_agent_patterns', $userAgentPatterns) }}</textarea>
+                        </div>
+
+                        <p style="margin: 0 0 12px; color: var(--muted); font-size: 0.88rem;">
+                            Cocok jika User-Agent mengandung salah satu keyword di atas (case-insensitive).
+                        </p>
+
+                        <div class="btn-row">
+                            <button class="btn-primary" type="submit">Simpan Pengaturan User-Agent</button>
+                        </div>
+                    </form>
+                </article>
             </section>
         </main>
     </div>

@@ -12,8 +12,58 @@ use Illuminate\Support\Str;
 
 class CbtInfoController extends Controller
 {
-    public function index()
+    private const SERVER_LOGIN_COUNTER_PREFIX = 'server_login_count:';
+
+    public function loadBalancer(Request $request)
     {
+        $info = $this->getInfoFromGarudaCbt();
+        $servers = $this->buildServerList($info);
+        $selectedServer = $this->selectAvailableServer($servers);
+        $targetUrl = trim((string) ($selectedServer['url'] ?? ''));
+
+        if ($targetUrl === '' || ! filter_var($targetUrl, FILTER_VALIDATE_URL)) {
+            return redirect()->route('cbt.index');
+        }
+
+        $targetHost = parse_url($targetUrl, PHP_URL_HOST);
+        if (is_string($targetHost) && strcasecmp($targetHost, $request->getHost()) === 0) {
+            return redirect()->route('cbt.index');
+        }
+
+        return redirect()->away($targetUrl);
+    }
+
+    public function connectServer(Request $request, string $serverKey)
+    {
+        $info = $this->getInfoFromGarudaCbt();
+        $serverMap = collect($this->buildServerList($info))->keyBy('key');
+        $server = $serverMap->get($serverKey);
+
+        if (! is_array($server) || empty($server['url'])) {
+            return redirect()->route('cbt.exambro.page', ['key' => (string) $request->query('key', '')]);
+        }
+
+        $targetUrl = trim((string) ($server['url'] ?? ''));
+        if ($targetUrl === '' || ! filter_var($targetUrl, FILTER_VALIDATE_URL)) {
+            return redirect()->route('cbt.exambro.page', ['key' => (string) $request->query('key', '')]);
+        }
+
+        $targetHost = parse_url($targetUrl, PHP_URL_HOST);
+        if (is_string($targetHost) && strcasecmp($targetHost, $request->getHost()) === 0) {
+            return redirect()->route('cbt.exambro.page', ['key' => (string) $request->query('key', '')]);
+        }
+
+        $this->increaseServerLoginCount((string) $server['key']);
+
+        return redirect()->away($targetUrl);
+    }
+
+    public function index(Request $request)
+    {
+        if ($this->isExambroClient($request)) {
+            return redirect()->route('cbt.exambro.page');
+        }
+
         $info = $this->getInfoFromGarudaCbt();
         $exambroActive = $this->isExambroActive();
         $servers = $this->buildServerList($info);
@@ -182,6 +232,13 @@ class CbtInfoController extends Controller
                     'url' => $server['url'] ?? null,
                     'status' => ($server['is_up'] ?? false) ? 'up' : 'down',
                     'selectable' => (($server['is_up'] ?? false) === true) && ! empty($server['url']),
+                    'country_code' => $server['country_code'] ?? '--',
+                    'core' => (int) ($server['core'] ?? 0),
+                    'ram' => (string) ($server['ram'] ?? ''),
+                    'capacity' => (int) ($server['capacity'] ?? 40),
+                    'login_count' => (int) ($server['login_count'] ?? 0),
+                    'login_indicator' => $server['login_indicator'] ?? 'low',
+                    'login_indicator_label' => $server['login_indicator_label'] ?? 'Rendah',
                 ];
             })->values(),
 
@@ -267,9 +324,11 @@ class CbtInfoController extends Controller
         ];
 
         $exambroApiKey       = $this->getExambroApiKey();
-        $exambroApiKeySource = (string) Cache::get('exambro_api_key', '') !== '' ? 'generated' : 'env';
+        $exambroApiKeySource = $this->hasGeneratedExambroApiKey() ? 'generated' : 'env';
         $exambroToken        = $this->getExambroToken();
         $exambroTokenSource  = $this->getExambroTokenSource();
+        $userAgentDetectionEnabled = $this->isUserAgentDetectionEnabled();
+        $userAgentPatterns = $this->getExambroUserAgentPatternsAsText();
         $exambroPageUrl      = route('cbt.exambro.page', ['key' => $exambroApiKey]);
         $exambroApiUrl       = route('cbt.exambro.info', ['key' => $exambroApiKey]);
         $exambroConfigDownloadUrl = route('cbt.exambro.api-key.download.app', ['key' => $exambroApiKey]);
@@ -283,6 +342,8 @@ class CbtInfoController extends Controller
             'exambroApiKeySource',
             'exambroToken',
             'exambroTokenSource',
+            'userAgentDetectionEnabled',
+            'userAgentPatterns',
             'exambroWarningValue',
             'exambroTokenVisibleOnPage',
                         'exambroPinActive',
@@ -290,6 +351,31 @@ class CbtInfoController extends Controller
             'exambroApiUrl',
             'exambroConfigDownloadUrl'
         ));
+    }
+
+    public function updateUserAgentSettings(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'user_agent_patterns' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $enabled = $request->boolean('user_agent_detection_enabled');
+        $patterns = $this->normalizeUserAgentPatterns($validated['user_agent_patterns']);
+
+        if (count($patterns) === 0) {
+            return redirect('/admin/cbt-info#panel-user-agent')
+                ->withErrors(['user_agent_patterns' => 'Daftar keyword User-Agent tidak boleh kosong.']);
+        }
+
+        Cache::forever('exambro_user_agent_detection_enabled', $enabled ? 1 : 0);
+        Cache::forever('exambro_user_agent_patterns', implode("\n", $patterns));
+
+        return redirect('/admin/cbt-info#panel-user-agent')
+            ->with('status', 'Pengaturan User-Agent berhasil diperbarui.');
     }
 
     public function showLogin()
@@ -357,6 +443,62 @@ class CbtInfoController extends Controller
         return redirect()->route('cbt.admin.login')->with('status', 'Anda sudah logout dari panel admin.');
     }
 
+    public function updateServerSettings(Request $request, string $key)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        if (! in_array($key, ['primary', 'backup1', 'backup2'])) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'server_name'     => ['nullable', 'string', 'max:60'],
+            'server_url'      => ['required', 'url', 'max:255'],
+            'server_core'     => ['nullable', 'integer', 'min:1', 'max:256'],
+            'server_ram'      => ['nullable', 'string', 'max:30'],
+            'server_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+        ]);
+
+        $cacheNameKey = match ($key) {
+            'primary' => 'primary',
+            'backup1' => 'backup_1',
+            'backup2' => 'backup_2',
+        };
+
+        $defaultName = match ($key) {
+            'primary' => 'Server Utama',
+            'backup1' => 'Server 1',
+            'backup2' => 'Server 2',
+        };
+
+        Cache::forever("cbt_server_name_{$cacheNameKey}", trim((string) ($validated['server_name'] ?? '')) ?: $defaultName);
+
+        if ($key === 'primary') {
+            DB::table('setting')->updateOrInsert(
+                ['id_setting' => 1],
+                ['web' => $validated['server_url']]
+            );
+        } elseif ($key === 'backup1') {
+            Cache::forever('cbt_backup_url_1', $validated['server_url']);
+        } else {
+            Cache::forever('cbt_backup_url_2', $validated['server_url']);
+        }
+
+        Cache::forever("cbt_server_spec_{$key}_core", (int) ($validated['server_core'] ?? 4));
+        Cache::forever("cbt_server_spec_{$key}_ram", trim((string) ($validated['server_ram'] ?? '8 GB')) ?: '8 GB');
+        Cache::forever("cbt_server_capacity_{$key}", (int) ($validated['server_capacity'] ?? 40));
+
+        $this->storeServerMetaToFile([
+            "server_{$key}_core" => (int) ($validated['server_core'] ?? 4),
+            "server_{$key}_ram" => trim((string) ($validated['server_ram'] ?? '8 GB')) ?: '8 GB',
+            "server_{$key}_capacity" => (int) ($validated['server_capacity'] ?? 40),
+        ]);
+
+        return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Pengaturan server berhasil disimpan.');
+    }
+
     public function update(Request $request)
     {
         if (! session('cbt_admin_auth')) {
@@ -368,6 +510,18 @@ class CbtInfoController extends Controller
             'primary_url' => ['required', 'url', 'max:255'],
             'backup_url_1' => ['required', 'url', 'max:255'],
             'backup_url_2' => ['required', 'url', 'max:255'],
+            'server_name_primary' => ['nullable', 'string', 'max:60'],
+            'server_name_backup_1' => ['nullable', 'string', 'max:60'],
+            'server_name_backup_2' => ['nullable', 'string', 'max:60'],
+            'primary_core' => ['nullable', 'integer', 'min:1', 'max:256'],
+            'backup1_core' => ['nullable', 'integer', 'min:1', 'max:256'],
+            'backup2_core' => ['nullable', 'integer', 'min:1', 'max:256'],
+            'primary_ram' => ['nullable', 'string', 'max:30'],
+            'backup1_ram' => ['nullable', 'string', 'max:30'],
+            'backup2_ram' => ['nullable', 'string', 'max:30'],
+            'primary_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'backup1_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'backup2_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'description' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -392,6 +546,42 @@ class CbtInfoController extends Controller
 
         Cache::forever('cbt_backup_url_1', $validated['backup_url_1']);
         Cache::forever('cbt_backup_url_2', $validated['backup_url_2']);
+
+        if ($request->has('server_name_primary')) {
+            Cache::forever('cbt_server_name_primary', trim((string) ($validated['server_name_primary'] ?? '')) ?: 'Server Utama');
+        }
+
+        if ($request->has('server_name_backup_1')) {
+            Cache::forever('cbt_server_name_backup_1', trim((string) ($validated['server_name_backup_1'] ?? '')) ?: 'Server 1');
+        }
+
+        if ($request->has('server_name_backup_2')) {
+            Cache::forever('cbt_server_name_backup_2', trim((string) ($validated['server_name_backup_2'] ?? '')) ?: 'Server 2');
+        }
+
+        Cache::forever('cbt_server_spec_primary_core', (int) ($validated['primary_core'] ?? 4));
+        Cache::forever('cbt_server_spec_backup1_core', (int) ($validated['backup1_core'] ?? 4));
+        Cache::forever('cbt_server_spec_backup2_core', (int) ($validated['backup2_core'] ?? 4));
+
+        Cache::forever('cbt_server_spec_primary_ram', trim((string) ($validated['primary_ram'] ?? '8 GB')) ?: '8 GB');
+        Cache::forever('cbt_server_spec_backup1_ram', trim((string) ($validated['backup1_ram'] ?? '8 GB')) ?: '8 GB');
+        Cache::forever('cbt_server_spec_backup2_ram', trim((string) ($validated['backup2_ram'] ?? '8 GB')) ?: '8 GB');
+
+        Cache::forever('cbt_server_capacity_primary', (int) ($validated['primary_capacity'] ?? 40));
+        Cache::forever('cbt_server_capacity_backup1', (int) ($validated['backup1_capacity'] ?? 40));
+        Cache::forever('cbt_server_capacity_backup2', (int) ($validated['backup2_capacity'] ?? 40));
+
+        $this->storeServerMetaToFile([
+            'server_primary_core' => (int) ($validated['primary_core'] ?? 4),
+            'server_backup1_core' => (int) ($validated['backup1_core'] ?? 4),
+            'server_backup2_core' => (int) ($validated['backup2_core'] ?? 4),
+            'server_primary_ram' => trim((string) ($validated['primary_ram'] ?? '8 GB')) ?: '8 GB',
+            'server_backup1_ram' => trim((string) ($validated['backup1_ram'] ?? '8 GB')) ?: '8 GB',
+            'server_backup2_ram' => trim((string) ($validated['backup2_ram'] ?? '8 GB')) ?: '8 GB',
+            'server_primary_capacity' => (int) ($validated['primary_capacity'] ?? 40),
+            'server_backup1_capacity' => (int) ($validated['backup1_capacity'] ?? 40),
+            'server_backup2_capacity' => (int) ($validated['backup2_capacity'] ?? 40),
+        ]);
 
         if (! empty($validated['description'])) {
             DB::table('setting')->where('id_setting', 1)->update([
@@ -429,6 +619,7 @@ class CbtInfoController extends Controller
         }
 
         Cache::forever('exambro_api_key', $newKey);
+        $this->storeExambroApiKey($newKey);
 
         return redirect()->route('cbt.admin')->with('status', 'API key Exambro berhasil digenerate ulang.');
     }
@@ -610,8 +801,63 @@ class CbtInfoController extends Controller
             return $cachedKey;
         }
 
+        // Fallback ke file storage agar tidak hilang saat cache:clear/optimize:clear
+        $fileKey = $this->readExambroApiKeyFromFile();
+        if ($fileKey !== '') {
+            Cache::forever('exambro_api_key', $fileKey);
+
+            return $fileKey;
+        }
+
         // Fallback ke .env hanya jika belum pernah generate
         return (string) config('app.exambro_api_key', '');
+    }
+
+    private function hasGeneratedExambroApiKey(): bool
+    {
+        if ((string) Cache::get('exambro_api_key', '') !== '') {
+            return true;
+        }
+
+        return $this->readExambroApiKeyFromFile() !== '';
+    }
+
+    private function exambroApiKeyFilePath(): string
+    {
+        return storage_path('app/private/exambro-api-key.json');
+    }
+
+    private function readExambroApiKeyFromFile(): string
+    {
+        $path = $this->exambroApiKeyFilePath();
+
+        if (! File::exists($path)) {
+            return '';
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            return '';
+        }
+
+        return trim((string) ($decoded['api_key'] ?? ''));
+    }
+
+    private function storeExambroApiKey(string $apiKey): void
+    {
+        $path = $this->exambroApiKeyFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        File::put($path, json_encode([
+            'api_key' => trim($apiKey),
+            'generated_at' => now()->toIso8601String(),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     private function getExambroToken(): string
@@ -720,6 +966,7 @@ class CbtInfoController extends Controller
     {
         $tokenData = DB::table('cbt_token')->where('id_token', 1)->first();
         $settingData = DB::table('setting')->where('id_setting', 1)->first();
+        $persistentServerMeta = $this->readServerMetaFromFile();
 
         $tokenUpdatedAt = $tokenData?->updated;
         $tokenLifetimeMinutes = isset($tokenData?->jarak) ? (int) $tokenData->jarak : 0;
@@ -736,6 +983,18 @@ class CbtInfoController extends Controller
             'cbt_url' => $settingData?->web ?? config('app.url'),
             'cbt_backup_url_1' => Cache::get('cbt_backup_url_1', $settingData?->web ?? config('app.url')),
             'cbt_backup_url_2' => Cache::get('cbt_backup_url_2', $settingData?->web ?? config('app.url')),
+            'server_name_primary' => Cache::get('cbt_server_name_primary', 'Server Utama'),
+            'server_name_backup_1' => Cache::get('cbt_server_name_backup_1', 'Server 1'),
+            'server_name_backup_2' => Cache::get('cbt_server_name_backup_2', 'Server 2'),
+            'server_primary_core' => max(1, (int) Cache::get('cbt_server_spec_primary_core', (int) ($persistentServerMeta['server_primary_core'] ?? 4))),
+            'server_backup1_core' => max(1, (int) Cache::get('cbt_server_spec_backup1_core', (int) ($persistentServerMeta['server_backup1_core'] ?? 4))),
+            'server_backup2_core' => max(1, (int) Cache::get('cbt_server_spec_backup2_core', (int) ($persistentServerMeta['server_backup2_core'] ?? 4))),
+            'server_primary_ram' => (string) Cache::get('cbt_server_spec_primary_ram', (string) ($persistentServerMeta['server_primary_ram'] ?? '8 GB')),
+            'server_backup1_ram' => (string) Cache::get('cbt_server_spec_backup1_ram', (string) ($persistentServerMeta['server_backup1_ram'] ?? '8 GB')),
+            'server_backup2_ram' => (string) Cache::get('cbt_server_spec_backup2_ram', (string) ($persistentServerMeta['server_backup2_ram'] ?? '8 GB')),
+            'server_primary_capacity' => max(1, (int) Cache::get('cbt_server_capacity_primary', (int) ($persistentServerMeta['server_primary_capacity'] ?? 40))),
+            'server_backup1_capacity' => max(1, (int) Cache::get('cbt_server_capacity_backup1', (int) ($persistentServerMeta['server_backup1_capacity'] ?? 40))),
+            'server_backup2_capacity' => max(1, (int) Cache::get('cbt_server_capacity_backup2', (int) ($persistentServerMeta['server_backup2_capacity'] ?? 40))),
             'description' => $settingData?->alamat ?? 'Silakan perbarui token dan URL CBT melalui halaman admin.',
             'school' => $settingData?->sekolah ?? 'GARUDA CBT',
             'app_name' => $settingData?->nama_aplikasi ?? 'GARUDA CBT',
@@ -749,27 +1008,43 @@ class CbtInfoController extends Controller
         $servers = [
             [
                 'key' => 'primary',
-                'name' => 'Server Utama',
+                'name' => $info->server_name_primary,
                 'url' => $info->cbt_url,
+                'core' => max(1, (int) ($info->server_primary_core ?? 4)),
+                'ram' => (string) ($info->server_primary_ram ?? '8 GB'),
+                'capacity' => max(1, (int) ($info->server_primary_capacity ?? 40)),
             ],
             [
                 'key' => 'backup1',
-                'name' => 'Server 1',
+                'name' => $info->server_name_backup_1,
                 'url' => $info->cbt_backup_url_1,
+                'core' => max(1, (int) ($info->server_backup1_core ?? 4)),
+                'ram' => (string) ($info->server_backup1_ram ?? '8 GB'),
+                'capacity' => max(1, (int) ($info->server_backup1_capacity ?? 40)),
             ],
             [
                 'key' => 'backup2',
-                'name' => 'Server 2',
+                'name' => $info->server_name_backup_2,
                 'url' => $info->cbt_backup_url_2,
+                'core' => max(1, (int) ($info->server_backup2_core ?? 4)),
+                'ram' => (string) ($info->server_backup2_ram ?? '8 GB'),
+                'capacity' => max(1, (int) ($info->server_backup2_capacity ?? 40)),
             ],
         ];
 
         foreach ($servers as &$server) {
             $isUp = $this->isServerUp($server['url']);
+            $loginCount = $this->getServerLoginCount((string) ($server['key'] ?? ''));
+            $indicatorMeta = $this->getLoginIndicatorMeta($loginCount, (int) ($server['capacity'] ?? 40));
+
             $server['is_up'] = $isUp;
             $server['status_label'] = $isUp ? 'SERVER UP' : 'SERVER DOWN';
             $server['status_class'] = $isUp ? 'up' : 'down';
             $server['qr_url'] = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . rawurlencode($server['url']);
+            $server['country_code'] = $this->extractCountryCodeFromUrl($server['url']);
+            $server['login_count'] = $loginCount;
+            $server['login_indicator'] = $indicatorMeta['key'];
+            $server['login_indicator_label'] = $indicatorMeta['label'];
         }
         unset($server);
 
@@ -836,6 +1111,82 @@ class CbtInfoController extends Controller
         });
     }
 
+    private function serverLoginCacheKey(string $serverKey): string
+    {
+        return self::SERVER_LOGIN_COUNTER_PREFIX . $serverKey;
+    }
+
+    private function getServerLoginCount(string $serverKey): int
+    {
+        $raw = Cache::get($this->serverLoginCacheKey($serverKey), 0);
+
+        if (is_int($raw) || is_float($raw)) {
+            return max(0, (int) $raw);
+        }
+
+        if (is_string($raw) && is_numeric($raw)) {
+            return max(0, (int) $raw);
+        }
+
+        return 0;
+    }
+
+    private function increaseServerLoginCount(string $serverKey): void
+    {
+        $key = $this->serverLoginCacheKey($serverKey);
+        $nextCount = $this->getServerLoginCount($serverKey) + 1;
+        Cache::forever($key, $nextCount);
+    }
+
+    private function getLoginIndicatorMeta(int $count, int $capacity): array
+    {
+        $capacity = max(1, $capacity);
+        $ratio = $count / $capacity;
+
+        if ($ratio >= 0.85) {
+            return ['key' => 'high', 'label' => 'Tinggi'];
+        }
+
+        if ($ratio >= 0.5) {
+            return ['key' => 'medium', 'label' => 'Sedang'];
+        }
+
+        return ['key' => 'low', 'label' => 'Rendah'];
+    }
+
+    private function extractCountryCodeFromUrl(?string $url): string
+    {
+        $url = trim((string) $url);
+        if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+            return '--';
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($host === '') {
+            return '--';
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return 'IP';
+            }
+
+            return 'LAN';
+        }
+
+        $parts = explode('.', $host);
+        if (count($parts) < 2) {
+            return 'INT';
+        }
+
+        $last = end($parts);
+        if (is_string($last) && strlen($last) === 2 && ctype_alpha($last)) {
+            return strtoupper($last);
+        }
+
+        return 'INT';
+    }
+
     private function passwordMatches(string $plainPassword, string $hashFromDb): bool
     {
         if (Hash::check($plainPassword, $hashFromDb)) {
@@ -868,5 +1219,116 @@ class CbtInfoController extends Controller
                 'Access-Control-Allow-Methods' => 'GET, OPTIONS',
                 'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Accept, Origin, X-Exambro-Key',
             ]);
+    }
+
+    private function isExambroClient(Request $request): bool
+    {
+        return $this->matchesExambroUserAgent($request->userAgent());
+    }
+
+    private function isUserAgentDetectionEnabled(): bool
+    {
+        $raw = Cache::get('exambro_user_agent_detection_enabled', 1);
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
+        if (is_int($raw) || is_float($raw)) {
+            return (int) $raw === 1;
+        }
+
+        if (is_string($raw)) {
+            return in_array(strtolower(trim($raw)), ['1', 'true', 'yes', 'on', 'active', 'aktif'], true);
+        }
+
+        return true;
+    }
+
+    private function getExambroUserAgentPatterns(): array
+    {
+        $stored = (string) Cache::get('exambro_user_agent_patterns', 'exambro');
+
+        return $this->normalizeUserAgentPatterns($stored);
+    }
+
+    private function getExambroUserAgentPatternsAsText(): string
+    {
+        return implode("\n", $this->getExambroUserAgentPatterns());
+    }
+
+    private function normalizeUserAgentPatterns(string $raw): array
+    {
+        $parts = preg_split('/[\r\n,]+/', $raw) ?: [];
+        $normalized = [];
+
+        foreach ($parts as $part) {
+            $value = strtolower(trim((string) $part));
+            if ($value !== '') {
+                $normalized[$value] = $value;
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    private function serverMetaFilePath(): string
+    {
+        return storage_path('app/private/server-meta.json');
+    }
+
+    private function readServerMetaFromFile(): array
+    {
+        $path = $this->serverMetaFilePath();
+
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return $decoded;
+    }
+
+    private function storeServerMetaToFile(array $updates): void
+    {
+        $path = $this->serverMetaFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        $current = $this->readServerMetaFromFile();
+        $merged = array_merge($current, $updates, [
+            'updated_at' => now()->toIso8601String(),
+        ]);
+
+        File::put($path, json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function matchesExambroUserAgent(?string $userAgent): bool
+    {
+        if (! $this->isUserAgentDetectionEnabled()) {
+            return false;
+        }
+
+        $ua = strtolower(trim((string) $userAgent));
+        if ($ua === '') {
+            return false;
+        }
+
+        foreach ($this->getExambroUserAgentPatterns() as $pattern) {
+            if ($pattern !== '' && str_contains($ua, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -5,9 +5,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CbtInfoController::class, 'index'])->name('cbt.index');
+Route::get('/go-cbt', [CbtInfoController::class, 'loadBalancer'])->name('cbt.lb');
+Route::get('/info', [CbtInfoController::class, 'index']);
 Route::get('/exambro', [CbtInfoController::class, 'exambroPage'])
     ->middleware('exambro.key')
     ->name('cbt.exambro.page');
+Route::get('/exambro/connect/{serverKey}', [CbtInfoController::class, 'connectServer'])
+    ->middleware('exambro.key')
+    ->name('cbt.exambro.connect');
 Route::get('/api/token-info', [CbtInfoController::class, 'tokenInfo'])->name('cbt.token.info');
 Route::match(['GET', 'OPTIONS'], '/api/exambro-info', [CbtInfoController::class, 'exambroInfo'])
     ->middleware('exambro.key')
@@ -104,4 +109,6 @@ Route::post('/admin/exambro-token-visibility-toggle', [CbtInfoController::class,
 Route::post('/admin/exambro-pin-toggle', [CbtInfoController::class, 'toggleExambroPinStatus'])->name('cbt.exambro.pin.toggle');
 Route::post('/admin/exambro-api-key/generate', [CbtInfoController::class, 'generateExambroApiKey'])->name('cbt.exambro.api-key.generate');
 Route::get('/admin/exambro-api-key/download', [CbtInfoController::class, 'downloadExambroApiConfig'])->name('cbt.exambro.api-key.download');
+Route::post('/admin/user-agent-settings', [CbtInfoController::class, 'updateUserAgentSettings'])->name('cbt.user-agent.update');
+Route::post('/admin/server/{key}', [CbtInfoController::class, 'updateServerSettings'])->name('cbt.server.update');
 Route::post('/admin/logout', [CbtInfoController::class, 'logout'])->name('cbt.admin.logout');

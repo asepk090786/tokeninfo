@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#3f7de8">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="{{ url('exambro-manifest.json') }}">
+    <link rel="icon" href="{{ url('pwa/exambro-icon.svg') }}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{{ url('pwa/exambro-icon.svg') }}">
     <title>Exambro Client - Interactive Dashboard</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
@@ -188,6 +193,52 @@
 
         .refresh-btn.loading svg {
             animation: spin 1s linear infinite;
+        }
+
+        .install-btn {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 6px 10px;
+            border-radius: 7px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(12, 110, 71, 0.32);
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .install-btn.visible {
+            display: inline-flex;
+        }
+
+        .install-btn:hover {
+            background: rgba(12, 110, 71, 0.5);
+            border-color: rgba(255, 255, 255, 0.45);
+        }
+
+        .kiosk-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 6px 10px;
+            border-radius: 7px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(15, 23, 42, 0.28);
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .kiosk-btn:hover {
+            background: rgba(15, 23, 42, 0.45);
+            border-color: rgba(255, 255, 255, 0.45);
         }
 
         .settings-toggle {
@@ -574,6 +625,79 @@
             flex-shrink: 0;
         }
 
+        .monitor-box {
+            min-width: 250px;
+            text-align: left;
+            background: #f7fafc;
+            border: 1px solid #d9e2ef;
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+
+        .monitor-title {
+            margin: 0 0 8px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #48607f;
+        }
+
+        .monitor-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 6px;
+        }
+
+        .monitor-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.83rem;
+            color: #334155;
+        }
+
+        .monitor-label {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .monitor-value {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            min-width: 78px;
+            background: #dff4e6;
+            color: #15803d;
+        }
+
+        .monitor-value.normal {
+            background: #dff4e6;
+            color: #15803d;
+        }
+
+        .monitor-value.medium {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .monitor-value.high {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .monitor-value.down {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
         .status-pill {
             display: inline-flex;
             align-items: center;
@@ -633,6 +757,7 @@
             .server-card { padding: 10px; }
             .server-name { font-size: 0.95rem; }
             .server-icon { width: 36px; height: 36px; }
+            .monitor-box { min-width: 100%; }
         }
     </style>
 </head>
@@ -652,6 +777,12 @@
                     </div>
                 </div>
                 <div class="hero-actions">
+                    <button id="kiosk-btn" class="kiosk-btn" type="button" title="Aktifkan layar penuh">
+                        Mode Kiosk
+                    </button>
+                    <button id="install-btn" class="install-btn" type="button" title="Install aplikasi Exambro">
+                        Install App
+                    </button>
                     <button id="refresh-btn" class="refresh-btn" title="Refresh data">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
@@ -785,8 +916,26 @@
                     <p class="server-caption"></p>
                 </div>
             </div>
-            <div class="server-side">
-                <span class="status-pill"></span>
+            <div class="server-side monitor-box">
+                <p class="monitor-title">Monitoring CBT</p>
+                <ul class="monitor-list">
+                    <li class="monitor-item">
+                        <span class="monitor-label">Status Server</span>
+                        <span class="monitor-value js-status-server">Online</span>
+                    </li>
+                    <li class="monitor-item">
+                        <span class="monitor-label">Lokasi Server</span>
+                        <span class="monitor-value normal js-lokasi-server">-</span>
+                    </li>
+                    <li class="monitor-item">
+                        <span class="monitor-label">Peserta Login</span>
+                        <span class="monitor-value normal js-peserta-login">0 / 40</span>
+                    </li>
+                    <li class="monitor-item">
+                        <span class="monitor-label">Indikator CBT</span>
+                        <span class="monitor-value normal js-indikator-cbt">Normal</span>
+                    </li>
+                </ul>
                 <p class="status-meta"></p>
             </div>
         </button>
@@ -800,9 +949,43 @@
         // ============================================
         // Configuration & State
         // ============================================
+        const urlParams = new URLSearchParams(window.location.search || '');
+        const initialKeyFromQuery = (urlParams.get('key') || '').trim();
+        const keyFromStorage = (function () {
+            try {
+                return window.localStorage.getItem('exambro_api_key') || '';
+            } catch (e) {
+                return '';
+            }
+        })();
+
+        const resolvedApiKey = (initialKeyFromQuery || keyFromStorage || '').trim();
+
+        if (resolvedApiKey) {
+            try {
+                window.localStorage.setItem('exambro_api_key', resolvedApiKey);
+            } catch (e) {
+                // Ignore storage errors.
+            }
+
+            try {
+                window.sessionStorage.setItem('exambro_api_key', resolvedApiKey);
+            } catch (e) {
+                // Ignore storage errors.
+            }
+
+            try {
+                const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'exambro_key=' + encodeURIComponent(resolvedApiKey) + '; Path=/; Max-Age=2592000; SameSite=Lax' + secureFlag;
+            } catch (e) {
+                // Ignore cookie write errors.
+            }
+        }
+
         const config = {
-            apiKey: '{{ addslashes(request()->query("key", "")) }}',
+            apiKey: resolvedApiKey,
             apiBase: '{{ url("api/exambro-info") }}',
+            connectBase: '{{ url("exambro/connect") }}',
             refreshInterval: 20000,
             autoRefresh: true,
             parseTokenStatus: parseTokenStatusValue,
@@ -820,6 +1003,8 @@
         // DOM Elements
         // ============================================
         const elements = {
+            kioskBtn: document.getElementById('kiosk-btn'),
+            installBtn: document.getElementById('install-btn'),
             refreshBtn: document.getElementById('refresh-btn'),
             settingsToggle: document.getElementById('settings-toggle'),
             settingsPanel: document.getElementById('settings-panel'),
@@ -836,6 +1021,8 @@
             footerNote: document.getElementById('footer-note')
         };
 
+        let deferredInstallPrompt = null;
+
         // ============================================
         // Utility Functions
         // ============================================
@@ -850,6 +1037,20 @@
 
         function parseWarningStatusValue(val) {
             return Number(val) === 1;
+        }
+
+        function locationFromCountryCode(code) {
+            if (code === 'ID') return 'Jakarta';
+            if (code === 'LAN') return 'Lokal';
+            if (code === 'IP') return 'Global';
+            if (!code || code === '--') return '-';
+            return code;
+        }
+
+        function indicatorLabelFromKey(key) {
+            if (key === 'high') return 'Tinggi';
+            if (key === 'medium') return 'Sedang';
+            return 'Normal';
         }
 
         function createAlert(type, message) {
@@ -906,6 +1107,81 @@
                 elements.intervalInput.value = config.refreshInterval / 1000;
             }
         });
+
+        if (elements.installBtn) {
+            elements.installBtn.addEventListener('click', async () => {
+                if (!deferredInstallPrompt) {
+                    return;
+                }
+
+                deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                deferredInstallPrompt = null;
+                elements.installBtn.classList.remove('visible');
+            });
+        }
+
+        if (elements.kioskBtn) {
+            elements.kioskBtn.addEventListener('click', async () => {
+                const root = document.documentElement;
+                if (!document.fullscreenElement && root.requestFullscreen) {
+                    try {
+                        await root.requestFullscreen();
+                        elements.kioskBtn.textContent = 'Keluar Kiosk';
+                    } catch (e) {
+                        // Ignore fullscreen errors.
+                    }
+                    return;
+                }
+
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    await document.exitFullscreen();
+                    elements.kioskBtn.textContent = 'Mode Kiosk';
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!elements.kioskBtn) {
+                return;
+            }
+
+            elements.kioskBtn.textContent = document.fullscreenElement ? 'Keluar Kiosk' : 'Mode Kiosk';
+        });
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredInstallPrompt = event;
+            if (elements.installBtn) {
+                elements.installBtn.classList.add('visible');
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            if (elements.installBtn) {
+                elements.installBtn.classList.remove('visible');
+            }
+        });
+
+        // If running as installed app, hide kiosk/install helper buttons.
+        const inStandalone = window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
+        if (inStandalone) {
+            if (elements.installBtn) {
+                elements.installBtn.classList.remove('visible');
+            }
+            if (elements.kioskBtn) {
+                elements.kioskBtn.style.display = 'none';
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('{{ url('exambro-sw.js') }}').catch(() => {
+                    // Ignore SW register failures to avoid blocking exam page.
+                });
+            });
+        }
 
         // ============================================
         // Rendering Functions
@@ -965,12 +1241,19 @@
                     label: s.name,
                     url: s.url,
                     status: s.status,
-                    selectable: s.selectable === true
+                    selectable: s.selectable === true,
+                    countryCode: s.country_code || '--',
+                    core: Number(s.core || 4),
+                    ram: s.ram || '8 GB',
+                    capacity: Number(s.capacity || 40),
+                    loginCount: Number(s.login_count || 0),
+                    loginIndicator: s.login_indicator || 'low',
+                    loginIndicatorLabel: s.login_indicator_label || 'Rendah'
                 }))
                 : [
-                    { key: 'primary', label: 'Server Utama', url: data.server_utama, status: data.server_utama_status, selectable: data.server_utama_status === 'up' && !!data.server_utama },
-                    { key: 'backup1', label: 'Server 2', url: data.server_backup1, status: data.server_backup1_status, selectable: data.server_backup1_status === 'up' && !!data.server_backup1 },
-                    { key: 'backup2', label: 'Server 3', url: data.server_backup2, status: data.server_backup2_status, selectable: data.server_backup2_status === 'up' && !!data.server_backup2 }
+                    { key: 'primary', label: 'Server Utama', url: data.server_utama, status: data.server_utama_status, selectable: data.server_utama_status === 'up' && !!data.server_utama, countryCode: '--', core: 4, ram: '8 GB', capacity: 40, loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
+                    { key: 'backup1', label: 'Server 2', url: data.server_backup1, status: data.server_backup1_status, selectable: data.server_backup1_status === 'up' && !!data.server_backup1, countryCode: '--', core: 4, ram: '8 GB', capacity: 40, loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
+                    { key: 'backup2', label: 'Server 3', url: data.server_backup2, status: data.server_backup2_status, selectable: data.server_backup2_status === 'up' && !!data.server_backup2, countryCode: '--', core: 4, ram: '8 GB', capacity: 40, loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' }
                 ];
 
             servers.forEach((server, idx) => {
@@ -982,14 +1265,31 @@
                 icon.innerHTML = serverIconSvg();
 
                 card.querySelector('.server-name').textContent = server.label;
+                card.querySelector('.server-caption').textContent = 'Kode Negara: ' + server.countryCode;
 
                 const isOnline = server.status === 'up';
-                const statusPill = card.querySelector('.status-pill');
                 const statusMeta = card.querySelector('.status-meta');
+                const statusServerEl = card.querySelector('.js-status-server');
+                const lokasiServerEl = card.querySelector('.js-lokasi-server');
+                const pesertaLoginEl = card.querySelector('.js-peserta-login');
+                const indikatorEl = card.querySelector('.js-indikator-cbt');
 
-                statusPill.classList.add(isOnline ? 'up' : 'down');
-                statusPill.textContent = isOnline ? 'Online' : 'Down';
+                const capacity = Math.max(1, Number(server.capacity || 40));
+                const pesertaText = server.loginCount + ' / ' + capacity;
+                const indikatorKey = server.loginIndicator || 'low';
+                const indikatorLabel = indicatorLabelFromKey(indikatorKey);
+
+                statusServerEl.textContent = isOnline ? 'Online' : 'Down';
+                statusServerEl.className = 'monitor-value js-status-server ' + (isOnline ? 'normal' : 'down');
+
+                lokasiServerEl.textContent = locationFromCountryCode(server.countryCode);
+                pesertaLoginEl.textContent = pesertaText;
+
+                indikatorEl.textContent = indikatorLabel;
+                indikatorEl.className = 'monitor-value js-indikator-cbt ' + (indikatorKey === 'high' ? 'high' : (indikatorKey === 'medium' ? 'medium' : 'normal'));
+
                 statusMeta.textContent = isOnline ? 'Ketuk untuk terhubung' : 'Server tidak tersedia';
+                statusMeta.style.color = isOnline ? '#475569' : '#dc2626';
 
                 const selectable = isOnline && !!server.url && server.selectable !== false;
                 if (!selectable) {
@@ -997,7 +1297,8 @@
                     card.disabled = true;
                 } else {
                     card.addEventListener('click', () => {
-                        window.location.href = server.url;
+                        const keyQuery = config.apiKey ? ('?key=' + encodeURIComponent(config.apiKey)) : '';
+                        window.location.href = config.connectBase + '/' + encodeURIComponent(server.key) + keyQuery;
                     });
                 }
 
