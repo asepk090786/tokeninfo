@@ -721,8 +721,8 @@ class CbtInfoController extends Controller
         $tokenData = DB::table('cbt_token')->where('id_token', 1)->first();
         $settingData = DB::table('setting')->where('id_setting', 1)->first();
 
-        $tokenUpdatedAt = $tokenData->updated ?? null;
-        $tokenLifetimeMinutes = isset($tokenData->jarak) ? (int) $tokenData->jarak : 0;
+        $tokenUpdatedAt = $tokenData?->updated;
+        $tokenLifetimeMinutes = isset($tokenData?->jarak) ? (int) $tokenData->jarak : 0;
 
         $tokenValidUntil = null;
         if (! empty($tokenUpdatedAt) && $tokenLifetimeMinutes > 0) {
@@ -730,15 +730,15 @@ class CbtInfoController extends Controller
         }
 
         return (object) [
-            'token' => $tokenData->token ?? 'BELUM-DISET',
-            'cbt_token' => $tokenData->token ?? 'BELUM-DISET',
+            'token' => $tokenData?->token ?? 'BELUM-DISET',
+            'cbt_token' => $tokenData?->token ?? 'BELUM-DISET',
             'exambro_token' => $this->getExambroToken(),
-            'cbt_url' => $settingData->web ?? config('app.url'),
-            'cbt_backup_url_1' => Cache::get('cbt_backup_url_1', $settingData->web ?? config('app.url')),
-            'cbt_backup_url_2' => Cache::get('cbt_backup_url_2', $settingData->web ?? config('app.url')),
-            'description' => $settingData->alamat ?? 'Silakan perbarui token dan URL CBT melalui halaman admin.',
-            'school' => $settingData->sekolah ?? 'GARUDA CBT',
-            'app_name' => $settingData->nama_aplikasi ?? 'GARUDA CBT',
+            'cbt_url' => $settingData?->web ?? config('app.url'),
+            'cbt_backup_url_1' => Cache::get('cbt_backup_url_1', $settingData?->web ?? config('app.url')),
+            'cbt_backup_url_2' => Cache::get('cbt_backup_url_2', $settingData?->web ?? config('app.url')),
+            'description' => $settingData?->alamat ?? 'Silakan perbarui token dan URL CBT melalui halaman admin.',
+            'school' => $settingData?->sekolah ?? 'GARUDA CBT',
+            'app_name' => $settingData?->nama_aplikasi ?? 'GARUDA CBT',
             'token_updated_at' => $tokenUpdatedAt ? now()->parse($tokenUpdatedAt)->format('d-m-Y H:i:s') : null,
             'token_valid_until' => $tokenValidUntil,
         ];
@@ -801,19 +801,39 @@ class CbtInfoController extends Controller
 
     private function isServerUp(?string $url): bool
     {
-        if (empty($url)) {
+        $url = trim((string) $url);
+
+        if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
             return false;
         }
 
-        try {
-            $response = Http::timeout(5)
-                ->withOptions(['allow_redirects' => true])
-                ->get($url);
+        $cacheKey = 'server_up_status:' . sha1($url);
 
-            return $response->successful() || $response->redirect();
-        } catch (\Throwable $e) {
+        return Cache::remember($cacheKey, now()->addSeconds(30), function () use ($url) {
+            try {
+                $headResponse = Http::timeout(2)
+                    ->withOptions(['allow_redirects' => true])
+                    ->head($url);
+
+                if ($headResponse->successful() || $headResponse->redirect()) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                // Beberapa server menolak method HEAD, lanjutkan fallback GET.
+            }
+
+            try {
+                $response = Http::timeout(3)
+                    ->withOptions(['allow_redirects' => true])
+                    ->get($url);
+
+                return $response->successful() || $response->redirect();
+            } catch (\Throwable $e) {
+                return false;
+            }
+
             return false;
-        }
+        });
     }
 
     private function passwordMatches(string $plainPassword, string $hashFromDb): bool
