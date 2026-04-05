@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# SSL ACME challenge files are generated per server/environment.
+/public/.well-known/acme-challenge/*
