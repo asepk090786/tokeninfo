@@ -6,18 +6,16 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 
 class ExambroApiKey
 {
+    private const APP_NAME_CACHE_KEY = 'exambro_app_name';
+    private const APP_NAME_CACHE_TTL_SECONDS = 120;
+
     public function handle(Request $request, Closure $next)
     {
         if ($request->isMethod('OPTIONS')) {
-            return response('', 204)->withHeaders([
-                'Access-Control-Allow-Origin' => '*',
-                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-                'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Accept, Origin, X-Exambro-Key',
-            ]);
+            return response('', 204)->withHeaders($this->corsHeaders($request));
         }
 
         // 1. Admin session aktif → langsung diizinkan
@@ -25,58 +23,66 @@ class ExambroApiKey
             return $next($request);
         }
 
+        if ($this->isBlockedBenchmarkUserAgent($request->userAgent())) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Forbidden user agent.',
+            ], 403)->withHeaders($this->corsHeaders($request));
+        }
+
         // 1.5 User-Agent Exambro -> diizinkan untuk akses halaman/API Exambro.
         if ($this->matchesExambroUserAgent($request->userAgent())) {
             return $next($request);
         }
 
-        $validKey = $this->getActiveExambroApiKey();
-
-        // Ambil key dari header, query, atau cookie agar PWA tetap auto-authorize.
-        $provided = trim((string) (
-            $request->header('X-Exambro-Key')
-            ?? $request->query('key')
-            ?? $request->cookie('exambro_key', '')
-        ));
-
-        $keyValid = $validKey !== '' && hash_equals($validKey, $provided);
-
-        // 2. API key cocok → diizinkan
-        if ($keyValid) {
-            $response = $next($request);
-
-            // Persist key ke cookie saat valid agar akses PWA berikutnya tidak perlu query key.
-            if ($provided !== '' && $request->cookie('exambro_key') !== $provided) {
-                $response->headers->setCookie(cookie(
-                    'exambro_key',
-                    $provided,
-                    60 * 24 * 30,
-                    '/',
-                    null,
-                    $request->isSecure(),
-                    true,
-                    false,
-                    'Lax'
-                ));
+        // 2. Selainnya → 401 Unauthorized
+        $appName = (string) Cache::remember(
+            self::APP_NAME_CACHE_KEY,
+            now()->addSeconds(self::APP_NAME_CACHE_TTL_SECONDS),
+            function () {
+                return (string) (DB::table('setting')->where('id_setting', 1)->value('nama_aplikasi') ?? 'GARUDA CBT');
             }
-
-            return $response;
-        }
-
-        // 3. Selainnya → 401 Unauthorized
-        $appName = (string) (DB::table('setting')->where('id_setting', 1)->value('nama_aplikasi') ?? 'GARUDA CBT');
+        );
 
         return response()->json([
             'status'  => 'error',
-            'message' => 'Unauthorized. API key tidak valid atau tidak disertakan.',
+            'message' => 'Unauthorized. Akses hanya untuk aplikasi Exambro yang valid.',
             'app_name' => $appName,
             'application_name' => $appName,
             'nama_aplikasi' => $appName,
-        ], 401)->withHeaders([
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Accept, Origin, X-Exambro-Key',
-        ]);
+        ], 401)->withHeaders($this->corsHeaders($request));
+    }
+
+    private function corsHeaders(Request $request): array
+    {
+        return [
+            'Access-Control-Allow-Origin' => $this->allowedCorsOrigin($request),
+            'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Accept, Origin',
+        ];
+    }
+
+    private function isBlockedBenchmarkUserAgent(?string $userAgent): bool
+    {
+        $ua = strtolower(trim((string) $userAgent));
+        if ($ua === '') {
+            return false;
+        }
+
+        return str_contains($ua, 'apachebench') || str_contains($ua, 'wrk/');
+    }
+
+    private function allowedCorsOrigin(Request $request): string
+    {
+        $origin = (string) $request->headers->get('Origin', '');
+        if ($origin !== '') {
+            $originHost = parse_url($origin, PHP_URL_HOST);
+            if (is_string($originHost) && strcasecmp($originHost, $request->getHost()) === 0) {
+                return $origin;
+            }
+        }
+
+        return $request->getSchemeAndHttpHost();
     }
 
     private function matchesExambroUserAgent(?string $userAgent): bool
@@ -138,43 +144,4 @@ class ExambroApiKey
         return array_values($normalized);
     }
 
-    private function getActiveExambroApiKey(): string
-    {
-        $cachedKey = (string) Cache::get('exambro_api_key', '');
-        if ($cachedKey !== '') {
-            return $cachedKey;
-        }
-
-        $fileKey = $this->readExambroApiKeyFromFile();
-        if ($fileKey !== '') {
-            Cache::forever('exambro_api_key', $fileKey);
-
-            return $fileKey;
-        }
-
-        return (string) config('app.exambro_api_key', '');
-    }
-
-    private function exambroApiKeyFilePath(): string
-    {
-        return storage_path('app/private/exambro-api-key.json');
-    }
-
-    private function readExambroApiKeyFromFile(): string
-    {
-        $path = $this->exambroApiKeyFilePath();
-
-        if (! File::exists($path)) {
-            return '';
-        }
-
-        $raw = File::get($path);
-        $decoded = json_decode($raw, true);
-
-        if (! is_array($decoded)) {
-            return '';
-        }
-
-        return trim((string) ($decoded['api_key'] ?? ''));
-    }
 }

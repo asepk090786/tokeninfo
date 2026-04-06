@@ -762,7 +762,10 @@
 
                 <article class="card" style="margin-top: 12px;">
                     <h4>PIN Exambro Aktif</h4>
-                    <p>Sumber PIN: {{ $exambroTokenSource === 'web' ? 'web/server file' : '.env' }}</p>
+                    <p>
+                        Sumber PIN:
+                        {{ $exambroTokenSource === 'db' ? 'database' : ($exambroTokenSource === 'web' ? 'web/server file' : '.env') }}
+                    </p>
                     <div class="field">
                         <label for="exambro-token">PIN Exambro</label>
                         <input id="exambro-token" type="text" value="{{ $exambroToken ?: 'Belum ada PIN Exambro' }}" readonly>
@@ -777,29 +780,60 @@
                 </article>
 
                 <article class="card" style="margin-top: 12px;">
+                    <h4>PIN Darurat Exit Exambro</h4>
+                    <p>PIN ini khusus untuk emergency exit di aplikasi Neo_Exam. Sumber saat ini: {{ $exambroEmergencyExitPinSource === 'database' ? 'database' : '.env' }}.</p>
+                    <form action="{{ route('cbt.exambro.exit-emergency-pin.update') }}" method="post">
+                        @csrf
+                        <div class="field">
+                            <label for="exambro-exit-emergency-pin">PIN Darurat Exit</label>
+                            <input
+                                id="exambro-exit-emergency-pin"
+                                name="exambro_exit_emergency_pin"
+                                type="text"
+                                maxlength="20"
+                                pattern="[A-Za-z0-9_-]{4,20}"
+                                value="{{ old('exambro_exit_emergency_pin', $exambroEmergencyExitPin) }}"
+                                required
+                            >
+                            @error('exambro_exit_emergency_pin')
+                                <small style="color:#fca5a5;">{{ $message }}</small>
+                            @enderror
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn-primary" type="submit">Simpan PIN Darurat Exit</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="card" style="margin-top: 12px;">
                     <h4>Update Token CBT</h4>
                     <p>Form ini untuk update Token CBT saja. URL server mengikuti data WEB saat ini.</p>
                     <form action="{{ route('cbt.update') }}" method="post">
                         @csrf
+                        @php
+                            $serverOne = $servers[0] ?? null;
+                            $serverTwo = $servers[1] ?? null;
+                            $serverThree = $servers[2] ?? null;
+                        @endphp
                         <div class="field">
                             <label for="token-only">Token CBT</label>
                             <input id="token-only" name="token" type="text" maxlength="6" value="{{ old('token', $info->token) }}" required>
                         </div>
-                        <input type="hidden" name="primary_url" value="{{ old('primary_url', $info->cbt_url) }}">
-                        <input type="hidden" name="backup_url_1" value="{{ old('backup_url_1', $info->cbt_backup_url_1) }}">
-                        <input type="hidden" name="backup_url_2" value="{{ old('backup_url_2', $info->cbt_backup_url_2) }}">
-                        <input type="hidden" name="server_name_primary" value="{{ old('server_name_primary', $info->server_name_primary ?? 'Server Utama') }}">
-                        <input type="hidden" name="server_name_backup_1" value="{{ old('server_name_backup_1', $info->server_name_backup_1 ?? 'Server 1') }}">
-                        <input type="hidden" name="server_name_backup_2" value="{{ old('server_name_backup_2', $info->server_name_backup_2 ?? 'Server 2') }}">
-                        <input type="hidden" name="primary_core" value="{{ old('primary_core', $info->server_primary_core ?? 4) }}">
-                        <input type="hidden" name="backup1_core" value="{{ old('backup1_core', $info->server_backup1_core ?? 4) }}">
-                        <input type="hidden" name="backup2_core" value="{{ old('backup2_core', $info->server_backup2_core ?? 4) }}">
-                        <input type="hidden" name="primary_ram" value="{{ old('primary_ram', $info->server_primary_ram ?? '8 GB') }}">
-                        <input type="hidden" name="backup1_ram" value="{{ old('backup1_ram', $info->server_backup1_ram ?? '8 GB') }}">
-                        <input type="hidden" name="backup2_ram" value="{{ old('backup2_ram', $info->server_backup2_ram ?? '8 GB') }}">
-                        <input type="hidden" name="primary_capacity" value="{{ old('primary_capacity', $info->server_primary_capacity ?? 40) }}">
-                        <input type="hidden" name="backup1_capacity" value="{{ old('backup1_capacity', $info->server_backup1_capacity ?? 40) }}">
-                        <input type="hidden" name="backup2_capacity" value="{{ old('backup2_capacity', $info->server_backup2_capacity ?? 40) }}">
+                        <input type="hidden" name="primary_url" value="{{ old('primary_url', $serverOne['url'] ?? $info->cbt_url) }}">
+                        <input type="hidden" name="backup_url_1" value="{{ old('backup_url_1', $serverTwo['url'] ?? $info->cbt_backup_url_1) }}">
+                        <input type="hidden" name="backup_url_2" value="{{ old('backup_url_2', $serverThree['url'] ?? $info->cbt_backup_url_2) }}">
+                        <input type="hidden" name="server_name_primary" value="{{ old('server_name_primary', $serverOne['name'] ?? ($info->server_name_primary ?? 'Server Utama')) }}">
+                        <input type="hidden" name="server_name_backup_1" value="{{ old('server_name_backup_1', $serverTwo['name'] ?? ($info->server_name_backup_1 ?? 'Server 1')) }}">
+                        <input type="hidden" name="server_name_backup_2" value="{{ old('server_name_backup_2', $serverThree['name'] ?? ($info->server_name_backup_2 ?? 'Server 2')) }}">
+                        <input type="hidden" name="primary_core" value="{{ old('primary_core', $serverOne['core'] ?? ($info->server_primary_core ?? 4)) }}">
+                        <input type="hidden" name="backup1_core" value="{{ old('backup1_core', $serverTwo['core'] ?? ($info->server_backup1_core ?? 4)) }}">
+                        <input type="hidden" name="backup2_core" value="{{ old('backup2_core', $serverThree['core'] ?? ($info->server_backup2_core ?? 4)) }}">
+                        <input type="hidden" name="primary_ram" value="{{ old('primary_ram', $serverOne['ram'] ?? ($info->server_primary_ram ?? '8 GB')) }}">
+                        <input type="hidden" name="backup1_ram" value="{{ old('backup1_ram', $serverTwo['ram'] ?? ($info->server_backup1_ram ?? '8 GB')) }}">
+                        <input type="hidden" name="backup2_ram" value="{{ old('backup2_ram', $serverThree['ram'] ?? ($info->server_backup2_ram ?? '8 GB')) }}">
+                        <input type="hidden" name="primary_capacity" value="{{ old('primary_capacity', $serverOne['capacity'] ?? ($info->server_primary_capacity ?? 40)) }}">
+                        <input type="hidden" name="backup1_capacity" value="{{ old('backup1_capacity', $serverTwo['capacity'] ?? ($info->server_backup1_capacity ?? 40)) }}">
+                        <input type="hidden" name="backup2_capacity" value="{{ old('backup2_capacity', $serverThree['capacity'] ?? ($info->server_backup2_capacity ?? 40)) }}">
                         <input type="hidden" name="description" value="{{ old('description', $info->description) }}">
                         <div class="btn-row">
                             <button class="btn-primary" type="submit">Simpan Token CBT</button>
@@ -810,71 +844,74 @@
 
             <section id="panel-api" class="panel">
                 <h3>Pengaturan API</h3>
-                <p class="panel-desc">Kelola API key Exambro, endpoint siap pakai, dan unduhan konfigurasi aplikasi.</p>
-
-                <article class="card">
-                    <h4>API Key Aktif</h4>
-                    <p>Sumber: {{ $exambroApiKeySource === 'generated' ? 'generated via panel admin' : '.env' }}</p>
-                    <div class="field">
-                        <label for="exambro-current-key">API Key</label>
-                        <input id="exambro-current-key" type="text" value="{{ $exambroApiKey ?: 'Belum ada API key' }}" readonly>
-                    </div>
-                    <div class="btn-row">
-                        <form action="{{ route('cbt.exambro.api-key.generate') }}" method="post" style="width: 100%;">
-                            @csrf
-                            <button class="btn-primary" type="submit">Generate API Key Baru</button>
-                        </form>
-                        <button class="copy-btn" id="copy-exambro-key" type="button">Salin API Key</button>
-                    </div>
-                </article>
+                <p class="panel-desc">Kelola endpoint Exambro tanpa API key dan unduhan paket aplikasi.</p>
 
                 <article class="card" style="margin-top: 12px;">
                     <h4>Endpoint Exambro Siap Pakai</h4>
                     <div class="field">
-                        <label for="exambro-page-url">Halaman Exambro (dengan key)</label>
+                        <label for="exambro-page-url">Halaman Exambro</label>
                         <input id="exambro-page-url" type="text" value="{{ $exambroPageUrl }}" readonly>
                     </div>
                     <div class="field">
-                        <label for="exambro-api-url">Endpoint API Exambro (dengan key)</label>
+                        <label for="exambro-api-url">Endpoint API Exambro</label>
                         <input id="exambro-api-url" type="text" value="{{ $exambroApiUrl }}" readonly>
-                    </div>
-                    <div class="field">
-                        <label for="exambro-config-download-url">Link Download config.json (Aplikasi)</label>
-                        <input id="exambro-config-download-url" type="text" value="{{ $exambroConfigDownloadUrl }}" readonly>
                     </div>
                     <div class="btn-row">
                         <a class="link-btn btn-soft" href="{{ $exambroPageUrl }}" target="_blank" rel="noopener noreferrer">Buka Halaman Exambro</a>
-                        <a class="link-btn btn-soft" href="{{ route('cbt.exambro.api-key.download') }}">Download Konfigurasi API Key</a>
-                        <a class="link-btn btn-soft" href="{{ $exambroConfigDownloadUrl }}">Download config.json (Aplikasi)</a>
+                        <a class="link-btn btn-soft" href="{{ route('cbt.neo-exam.zip.download') }}">Download Neo_Exam.zip</a>
                         <button class="copy-btn" id="copy-exambro-page" type="button">Salin Link Halaman</button>
                         <button class="copy-btn" id="copy-exambro-api" type="button">Salin Link API</button>
-                        <button class="copy-btn" id="copy-exambro-config-download" type="button">Salin Link config.json</button>
                     </div>
+                    @error('zip')
+                        <small style="color:#fca5a5; display:block; margin-top:8px;">{{ $message }}</small>
+                    @enderror
                 </article>
             </section>
 
             <section id="panel-web" class="panel">
                 <h3>Pengaturan WEB</h3>
-                <p class="panel-desc">Kelola nama, URL, dan spesifikasi masing-masing server CBT.</p>
+                <p class="panel-desc">Tambah server baru, edit server yang ada, dan hapus server jika tidak dipakai lagi.</p>
 
-                {{-- Server Cards --}}
+                <article class="card" style="margin-top: 12px;">
+                    <h4>Tambah Server Baru</h4>
+                    <form action="{{ route('cbt.server.add') }}" method="post">
+                        @csrf
+                        <div class="grid" style="margin-top: 8px;">
+                            <div class="field">
+                                <label for="new-server-name">Nama Server</label>
+                                <input id="new-server-name" name="server_name" type="text" maxlength="60" placeholder="Contoh: Server Lab 4">
+                            </div>
+                            <div class="field">
+                                <label for="new-server-url">URL Server</label>
+                                <input id="new-server-url" name="server_url" type="url" maxlength="255" required placeholder="https://cbt4.sekolah.sch.id">
+                            </div>
+                            <div class="field">
+                                <label for="new-server-core">Core CPU</label>
+                                <input id="new-server-core" name="server_core" type="number" min="1" max="256" value="4">
+                            </div>
+                            <div class="field">
+                                <label for="new-server-ram">RAM</label>
+                                <input id="new-server-ram" name="server_ram" type="text" maxlength="30" value="8 GB">
+                            </div>
+                            <div class="field">
+                                <label for="new-server-capacity">Kapasitas Peserta</label>
+                                <input id="new-server-capacity" name="server_capacity" type="number" min="1" max="100000" value="40">
+                            </div>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn-primary" type="submit">Tambah Server</button>
+                        </div>
+                    </form>
+                </article>
+
                 <div class="svr-section">
                     <div class="svr-grid">
                         @foreach ($servers as $idx => $server)
                             @php
-                                $isUp       = $server['status_class'] === 'up';
-                                $isPrimary  = $idx === 0;
-                                $dotClass   = $isUp ? ($isPrimary ? 'dot-green' : 'dot-orange') : 'dot-gray';
-                                $btnClass   = $isUp ? ($isPrimary ? 'svr-btn-green' : 'svr-btn-orange') : 'svr-btn-dark';
-                                $urlMap     = [$info->cbt_url, $info->cbt_backup_url_1, $info->cbt_backup_url_2];
-                                $nameMap    = [
-                                    $info->server_name_primary  ?? 'Server Utama',
-                                    $info->server_name_backup_1 ?? 'Server 1',
-                                    $info->server_name_backup_2 ?? 'Server 2',
-                                ];
-                                $coreMap    = [$info->server_primary_core ?? 4, $info->server_backup1_core ?? 4, $info->server_backup2_core ?? 4];
-                                $ramMap     = [$info->server_primary_ram  ?? '8 GB', $info->server_backup1_ram  ?? '8 GB', $info->server_backup2_ram  ?? '8 GB'];
-                                $capMap     = [$info->server_primary_capacity ?? 40, $info->server_backup1_capacity ?? 40, $info->server_backup2_capacity ?? 40];
+                                $isUp = $server['status_class'] === 'up';
+                                $isHidden = (($server['hidden'] ?? false) === true);
+                                $dotClass = $isUp ? ($idx === 0 ? 'dot-green' : 'dot-orange') : 'dot-gray';
+                                $btnClass = $isUp ? ($idx === 0 ? 'svr-btn-green' : 'svr-btn-orange') : 'svr-btn-dark';
                             @endphp
                             <form action="{{ route('cbt.server.update', $server['key']) }}" method="post" class="svr-card">
                                 @csrf
@@ -885,69 +922,82 @@
                                     </div>
                                     <span class="svr-dot {{ $dotClass }}"></span>
                                 </div>
+                                <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-top: 1px solid rgba(148, 163, 184, 0.16); border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
+                                    Status Tampil: <strong style="color: {{ $isHidden ? '#f59e0b' : '#22c55e' }};">{{ $isHidden ? 'HIDDEN' : 'VISIBLE' }}</strong>
+                                </div>
                                 <div class="svr-body">
                                     <div class="svr-field">
                                         <label class="svr-label">Nama Server</label>
-                                        <input class="svr-input" name="server_name" type="text" maxlength="60"
-                                               value="{{ $nameMap[$idx] }}" required>
+                                        <input class="svr-input" name="server_name" type="text" maxlength="60" value="{{ $server['name'] }}" required>
                                     </div>
                                     <div class="svr-field">
                                         <label class="svr-label">URL Server</label>
-                                        <input class="svr-input" name="server_url" type="url" maxlength="255"
-                                               value="{{ $urlMap[$idx] }}" required>
+                                        <input class="svr-input" name="server_url" type="url" maxlength="255" value="{{ $server['url'] }}" required>
                                     </div>
                                     <details class="svr-advanced">
-                                        <summary class="svr-adv-toggle">⚙ Spesifikasi &amp; Kapasitas</summary>
+                                        <summary class="svr-adv-toggle">Spesifikasi dan Kapasitas</summary>
                                         <div class="svr-field">
                                             <label class="svr-label">Core CPU</label>
-                                            <input class="svr-input" name="server_core" type="number" min="1" max="256"
-                                                   value="{{ $coreMap[$idx] }}" required>
+                                            <input class="svr-input" name="server_core" type="number" min="1" max="256" value="{{ $server['core'] ?? 4 }}" required>
                                         </div>
                                         <div class="svr-field">
                                             <label class="svr-label">RAM</label>
-                                            <input class="svr-input" name="server_ram" type="text" maxlength="30"
-                                                   value="{{ $ramMap[$idx] }}" required>
+                                            <input class="svr-input" name="server_ram" type="text" maxlength="30" value="{{ $server['ram'] ?? '8 GB' }}" required>
                                         </div>
                                         <div class="svr-field">
                                             <label class="svr-label">Kapasitas Peserta</label>
-                                            <input class="svr-input" name="server_capacity" type="number" min="1" max="100000"
-                                                   value="{{ $capMap[$idx] }}" required>
+                                            <input class="svr-input" name="server_capacity" type="number" min="1" max="100000" value="{{ $server['capacity'] ?? 40 }}" required>
                                         </div>
                                     </details>
                                 </div>
-                                <button type="submit" class="svr-btn {{ $btnClass }}">💾 Simpan</button>
+                                <button type="submit" class="svr-btn {{ $btnClass }}">Simpan Perubahan</button>
+                                <div style="padding: 10px; background: #0f172a; border-top: 1px solid rgba(148, 163, 184, 0.16);">
+                                    <button type="submit" class="svr-btn" style="background: {{ $isHidden ? '#16a34a' : '#f59e0b' }}; border-radius: 8px;" form="visibility-server-{{ $server['key'] }}">{{ $isHidden ? 'Unhide Server' : 'Hide Server' }}</button>
+                                </div>
+                                @if (count($servers) > 1)
+                                    <div style="padding: 10px; background: #0f172a;">
+                                        <button type="submit" class="svr-btn" style="background: #dc2626; border-radius: 8px;" form="delete-server-{{ $server['key'] }}">Hapus Server</button>
+                                    </div>
+                                @endif
                             </form>
+
+                            <form id="visibility-server-{{ $server['key'] }}" action="{{ route('cbt.server.visibility.toggle', $server['key']) }}" method="post" style="display:none;">
+                                @csrf
+                            </form>
+
+                            @if (count($servers) > 1)
+                                <form id="delete-server-{{ $server['key'] }}" action="{{ route('cbt.server.delete', $server['key']) }}" method="post" style="display:none;">
+                                    @csrf
+                                </form>
+                            @endif
                         @endforeach
                     </div>
                 </div>
 
-                {{-- Ringkasan Status Server --}}
                 <div class="svr-summary">
-                    <h4 class="summary-title">🏁 Ringkasan Status Server</h4>
+                    <h4 class="summary-title">Ringkasan Status Server</h4>
                     <div class="summary-grid">
                         @foreach ($servers as $idx => $server)
                             @php
-                                $isUp        = $server['status_class'] === 'up';
-                                $isPrimary   = $idx === 0;
-                                $statusLabel = $isUp ? ($isPrimary ? 'AKTIF' : 'SIAGA') : 'OFFLINE';
-                                $summClass   = $isUp ? ($isPrimary ? 'summary-aktif' : 'summary-siaga') : 'summary-offline';
-                                $roleLabel   = $isPrimary ? 'Utama' : 'Backup ' . $idx;
-                                $capacity    = max(1, (int) ($server['capacity'] ?? 1));
-                                $loginCount  = max(0, (int) ($server['login_count'] ?? 0));
-                                $loadPercent = (int) round(($loginCount / $capacity) * 100);
-                                $loadClass   = $server['login_indicator'] ?? 'low';
-                                $loadLabel   = $server['login_indicator_label'] ?? 'Rendah';
+                                $isUp = $server['status_class'] === 'up';
+                                $statusLabel = $isUp ? ($idx === 0 ? 'AKTIF' : 'SIAGA') : 'OFFLINE';
+                                $summClass = $isUp ? ($idx === 0 ? 'summary-aktif' : 'summary-siaga') : 'summary-offline';
+                                $capacity = max(1, (int) ($server['capacity'] ?? 1));
+                                $activeCount = max(0, (int) ($server['active_user_count'] ?? 0));
+                                $loadPercent = (int) round(($activeCount / $capacity) * 100);
+                                $loadClass = $server['login_indicator'] ?? 'low';
+                                $loadLabel = $server['login_indicator_label'] ?? 'Rendah';
                             @endphp
                             <div class="summary-item {{ $summClass }}">
                                 <div class="summary-row">
-                                    <span class="summary-name">{{ $server['name'] }} – {{ $roleLabel }}</span>
+                                    <span class="summary-name">{{ $server['name'] }}</span>
                                     <span class="summary-badge badge-{{ strtolower($statusLabel) }}">{{ $statusLabel }}</span>
                                 </div>
                                 <p class="summary-url">{{ $server['url'] }}</p>
                                 <div class="summary-stats">
                                     <div class="summary-stat-row">
-                                        <span class="summary-stat-label">Peserta Login</span>
-                                        <span class="summary-load-badge {{ $loadClass }}">{{ $loginCount }} / {{ $capacity }} ({{ $loadPercent }}%)</span>
+                                        <span class="summary-stat-label">Peserta Aktif (2m)</span>
+                                        <span class="summary-load-badge {{ $loadClass }}">{{ $activeCount }} / {{ $capacity }} ({{ $loadPercent }}%)</span>
                                     </div>
                                     <div class="summary-stat-row">
                                         <span class="summary-stat-label">Indikator CBT</span>
@@ -968,22 +1018,27 @@
                     <h4>Keterangan Halaman Home</h4>
                     <form action="{{ route('cbt.update') }}" method="post">
                         @csrf
+                        @php
+                            $serverOne = $servers[0] ?? null;
+                            $serverTwo = $servers[1] ?? null;
+                            $serverThree = $servers[2] ?? null;
+                        @endphp
                         <input type="hidden" name="token" value="{{ $info->token }}">
-                        <input type="hidden" name="primary_url" value="{{ $info->cbt_url }}">
-                        <input type="hidden" name="backup_url_1" value="{{ $info->cbt_backup_url_1 }}">
-                        <input type="hidden" name="backup_url_2" value="{{ $info->cbt_backup_url_2 }}">
-                        <input type="hidden" name="server_name_primary" value="{{ $info->server_name_primary ?? 'Server Utama' }}">
-                        <input type="hidden" name="server_name_backup_1" value="{{ $info->server_name_backup_1 ?? 'Server 1' }}">
-                        <input type="hidden" name="server_name_backup_2" value="{{ $info->server_name_backup_2 ?? 'Server 2' }}">
-                        <input type="hidden" name="primary_core" value="{{ $info->server_primary_core ?? 4 }}">
-                        <input type="hidden" name="backup1_core" value="{{ $info->server_backup1_core ?? 4 }}">
-                        <input type="hidden" name="backup2_core" value="{{ $info->server_backup2_core ?? 4 }}">
-                        <input type="hidden" name="primary_ram" value="{{ $info->server_primary_ram ?? '8 GB' }}">
-                        <input type="hidden" name="backup1_ram" value="{{ $info->server_backup1_ram ?? '8 GB' }}">
-                        <input type="hidden" name="backup2_ram" value="{{ $info->server_backup2_ram ?? '8 GB' }}">
-                        <input type="hidden" name="primary_capacity" value="{{ $info->server_primary_capacity ?? 40 }}">
-                        <input type="hidden" name="backup1_capacity" value="{{ $info->server_backup1_capacity ?? 40 }}">
-                        <input type="hidden" name="backup2_capacity" value="{{ $info->server_backup2_capacity ?? 40 }}">
+                        <input type="hidden" name="primary_url" value="{{ $serverOne['url'] ?? $info->cbt_url }}">
+                        <input type="hidden" name="backup_url_1" value="{{ $serverTwo['url'] ?? $info->cbt_backup_url_1 }}">
+                        <input type="hidden" name="backup_url_2" value="{{ $serverThree['url'] ?? $info->cbt_backup_url_2 }}">
+                        <input type="hidden" name="server_name_primary" value="{{ $serverOne['name'] ?? ($info->server_name_primary ?? 'Server Utama') }}">
+                        <input type="hidden" name="server_name_backup_1" value="{{ $serverTwo['name'] ?? ($info->server_name_backup_1 ?? 'Server 1') }}">
+                        <input type="hidden" name="server_name_backup_2" value="{{ $serverThree['name'] ?? ($info->server_name_backup_2 ?? 'Server 2') }}">
+                        <input type="hidden" name="primary_core" value="{{ $serverOne['core'] ?? ($info->server_primary_core ?? 4) }}">
+                        <input type="hidden" name="backup1_core" value="{{ $serverTwo['core'] ?? ($info->server_backup1_core ?? 4) }}">
+                        <input type="hidden" name="backup2_core" value="{{ $serverThree['core'] ?? ($info->server_backup2_core ?? 4) }}">
+                        <input type="hidden" name="primary_ram" value="{{ $serverOne['ram'] ?? ($info->server_primary_ram ?? '8 GB') }}">
+                        <input type="hidden" name="backup1_ram" value="{{ $serverTwo['ram'] ?? ($info->server_backup1_ram ?? '8 GB') }}">
+                        <input type="hidden" name="backup2_ram" value="{{ $serverThree['ram'] ?? ($info->server_backup2_ram ?? '8 GB') }}">
+                        <input type="hidden" name="primary_capacity" value="{{ $serverOne['capacity'] ?? ($info->server_primary_capacity ?? 40) }}">
+                        <input type="hidden" name="backup1_capacity" value="{{ $serverTwo['capacity'] ?? ($info->server_backup1_capacity ?? 40) }}">
+                        <input type="hidden" name="backup2_capacity" value="{{ $serverThree['capacity'] ?? ($info->server_backup2_capacity ?? 40) }}">
                         <div class="field">
                             <label for="description">Keterangan / Deskripsi Halaman</label>
                             <textarea id="description" name="description">{{ old('description', $info->description) }}</textarea>
@@ -1091,26 +1146,16 @@
             }
 
             var exambroTokenInput = document.getElementById('exambro-token');
-            var keyInput = document.getElementById('exambro-current-key');
             var pageInput = document.getElementById('exambro-page-url');
             var apiInput = document.getElementById('exambro-api-url');
-            var configInput = document.getElementById('exambro-config-download-url');
 
             var copyTokenBtn = document.getElementById('copy-exambro-token');
-            var copyKeyBtn = document.getElementById('copy-exambro-key');
             var copyPageBtn = document.getElementById('copy-exambro-page');
             var copyApiBtn = document.getElementById('copy-exambro-api');
-            var copyConfigBtn = document.getElementById('copy-exambro-config-download');
 
             if (copyTokenBtn) {
                 copyTokenBtn.addEventListener('click', function () {
                     copyValue(exambroTokenInput, copyTokenBtn, 'PIN Exambro kosong.');
-                });
-            }
-
-            if (copyKeyBtn) {
-                copyKeyBtn.addEventListener('click', function () {
-                    copyValue(keyInput, copyKeyBtn, 'API Key kosong.');
                 });
             }
 
@@ -1123,12 +1168,6 @@
             if (copyApiBtn) {
                 copyApiBtn.addEventListener('click', function () {
                     copyValue(apiInput, copyApiBtn, 'Link API Exambro kosong.');
-                });
-            }
-
-            if (copyConfigBtn) {
-                copyConfigBtn.addEventListener('click', function () {
-                    copyValue(configInput, copyConfigBtn, 'Link download config kosong.');
                 });
             }
         })();

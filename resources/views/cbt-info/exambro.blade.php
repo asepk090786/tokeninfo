@@ -3,38 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#3f7de8">
+    <meta name="theme-color" content="#0f766e">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="{{ url('exambro-manifest.json') }}">
     <link rel="icon" href="{{ url('pwa/exambro-icon.svg') }}" type="image/svg+xml">
     <link rel="apple-touch-icon" href="{{ url('pwa/exambro-icon.svg') }}">
     <title>Exambro Client - Interactive Dashboard</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg: #dde1e8;
-            --panel: #eff2f7;
-            --text: #233049;
-            --muted: #7d8aa0;
-            --line: #c8d0dd;
+            --bg: #eef1f6;
+            --panel: #ffffff;
+            --text: #1f3253;
+            --muted: #60708c;
+            --line: #d7deea;
             --good: #10a856;
             --good-bg: #c8f0dc;
             --bad: #d94747;
             --bad-bg: #f8d3d3;
-            --accent-start: #3f7de8;
-            --accent-end: #7a58ea;
+            --accent-start: #2f6fdf;
+            --accent-end: #5f8fe9;
             --transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         body {
             font-family: "Plus Jakarta Sans", sans-serif;
-            background: linear-gradient(165deg, #d5dae2 0%, #e7ebf2 100%);
+            background: linear-gradient(165deg, #f4f6fb 0%, #e9edf4 100%);
             color: var(--text);
             min-height: 100vh;
-            padding: 0;
+            padding: 18px;
         }
 
         @keyframes pulse {
@@ -74,32 +72,31 @@
         }
 
         .app-shell {
-            width: min(760px, 100%);
+            width: min(1080px, 100%);
             margin: 0 auto;
             min-height: 100vh;
-            background: var(--bg);
-            border-left: 1px solid #bcc6d4;
-            border-right: 1px solid #bcc6d4;
+            background: transparent;
             display: flex;
             flex-direction: column;
         }
 
         .hero {
-            background: linear-gradient(100deg, var(--accent-start), var(--accent-end));
-            color: #fff;
-            padding: 14px 14px 12px;
-            box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.2);
-            position: sticky;
-            top: 0;
-            z-index: 10;
+            color: var(--text);
+            padding: 0;
+            background: transparent;
         }
 
         .hero-top {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
         }
 
         .brand {
@@ -112,19 +109,19 @@
         }
 
         .brand-logo {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.2);
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #3b82f6, #2f6fdf);
             display: grid;
             place-items: center;
             flex-shrink: 0;
         }
 
         .brand-logo svg {
-            width: 20px;
-            height: 20px;
-            fill: #f8fbff;
+            width: 28px;
+            height: 28px;
+            fill: #ffffff;
         }
 
         .brand-content {
@@ -132,49 +129,72 @@
         }
 
         .brand-title {
-            font-size: 1.4rem;
+            font-size: clamp(2rem, 3.1vw, 3rem);
             font-weight: 800;
             letter-spacing: 0.2px;
             line-height: 1;
+            color: #2f6fdf;
         }
 
         .brand-subtitle {
-            margin-top: 2px;
-            opacity: 0.95;
-            font-size: 0.85rem;
+            margin-top: 6px;
+            opacity: 1;
+            font-size: 0.92rem;
             font-weight: 700;
             line-height: 1.25;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            color: #51658a;
         }
 
         .hero-actions {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 10px;
             flex-shrink: 0;
         }
 
-        .refresh-btn {
+        .refresh-btn,
+        .install-btn,
+        .kiosk-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 5px;
-            padding: 6px 10px;
-            border-radius: 7px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
-            font-size: 0.7rem;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #ffffff;
+            color: #334865;
+            font-size: 0.82rem;
             font-weight: 700;
             cursor: pointer;
             transition: var(--transition);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
         }
 
-        .refresh-btn:hover {
-            background: rgba(255, 255, 255, 0.25);
-            border-color: rgba(255, 255, 255, 0.4);
+        .action-ic {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #3b82f6, #2f6fdf);
+            border-color: #2f6fdf;
+            color: #fff;
+        }
+
+        .refresh-btn:hover,
+        .install-btn:hover,
+        .kiosk-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
         }
 
         .refresh-btn:active {
@@ -187,8 +207,8 @@
         }
 
         .refresh-btn svg {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
         }
 
         .refresh-btn.loading svg {
@@ -197,111 +217,68 @@
 
         .install-btn {
             display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            padding: 6px 10px;
-            border-radius: 7px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(12, 110, 71, 0.32);
-            color: #fff;
-            font-size: 0.7rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: var(--transition);
         }
 
         .install-btn.visible {
             display: inline-flex;
         }
 
-        .install-btn:hover {
-            background: rgba(12, 110, 71, 0.5);
-            border-color: rgba(255, 255, 255, 0.45);
-        }
-
-        .kiosk-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            padding: 6px 10px;
-            border-radius: 7px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(15, 23, 42, 0.28);
-            color: #fff;
-            font-size: 0.7rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .kiosk-btn:hover {
-            background: rgba(15, 23, 42, 0.45);
-            border-color: rgba(255, 255, 255, 0.45);
-        }
-
         .settings-toggle {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 28px;
-            height: 28px;
+            width: 44px;
+            height: 44px;
             padding: 0;
-            border-radius: 7px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: #60708c;
             cursor: pointer;
             transition: var(--transition);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
         }
 
         .settings-toggle:hover {
-            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
         }
 
         .settings-toggle svg {
-            width: 14px;
-            height: 14px;
+            width: 18px;
+            height: 18px;
         }
 
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 8px;
-            border-radius: 999px;
-            font-size: 0.65rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            background: rgba(255, 255, 255, 0.2);
-            color: #fff;
+        .hero-panel {
+            position: relative;
+            overflow: hidden;
+            padding: 22px 26px;
+            border-radius: 20px;
+            border: 1px solid #ccd8ea;
+            background: linear-gradient(120deg, #eff4fb 0%, #d9e7fb 100%);
+            box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
         }
 
-        .status-badge.live {
-            background: rgba(34, 197, 94, 0.3);
-        }
-
-        .status-badge .indicator {
-            width: 5px;
-            height: 5px;
-            border-radius: 999px;
-            background: #fff;
-            display: inline-block;
-        }
-
-        .status-badge.live .indicator {
-            background: #22c55e;
-            animation: pulse 2s ease-in-out infinite;
+        .hero-panel::before {
+            content: '';
+            position: absolute;
+            right: -120px;
+            top: -35px;
+            width: 520px;
+            height: 250px;
+            border-radius: 130px;
+            background: radial-gradient(circle at 30% 50%, rgba(120, 161, 231, 0.42) 0%, rgba(120, 161, 231, 0.16) 48%, transparent 70%);
+            pointer-events: none;
         }
 
         .hero-info {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 24px;
+            margin-top: 0;
             animation: slideIn 0.5s ease 0.1s both;
+            position: relative;
+            z-index: 1;
         }
 
         .hero-left {
@@ -310,16 +287,20 @@
         }
 
         .hero-title {
-            font-size: 1.3rem;
-            font-weight: 700;
+            font-size: clamp(2.1rem, 3vw, 2.9rem);
+            font-weight: 800;
             line-height: 1.1;
             margin: 0;
+            color: #1d2f4e;
         }
 
         .hero-subtitle {
-            font-size: 0.8rem;
-            margin-top: 2px;
-            opacity: 0.85;
+            font-size: 1.05rem;
+            margin-top: 10px;
+            opacity: 1;
+            color: #4f5f7e;
+            line-height: 1.45;
+            font-weight: 600;
         }
 
         .hero-right {
@@ -328,17 +309,19 @@
 
         .token-code {
             display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.85rem;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            font-size: 0.9rem;
             font-weight: 700;
-            letter-spacing: 0.1px;
-            text-align: right;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            border-radius: 8px;
-            padding: 6px 10px;
-            box-shadow: 0 3px 10px rgba(29, 78, 216, 0.18);
+            letter-spacing: 0.02em;
+            text-align: left;
+            min-width: 190px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #c8d7ec;
+            border-radius: 18px;
+            padding: 14px 18px;
+            box-shadow: 0 10px 20px rgba(47, 111, 223, 0.12);
             transition: var(--transition);
             animation: slideIn 0.5s ease 0.15s both;
         }
@@ -348,17 +331,19 @@
         }
 
         .token-code .label {
-            opacity: 0.85;
-            font-size: 0.7rem;
+            opacity: 1;
+            font-size: 1.15rem;
             font-weight: 700;
+            color: #6a7d9c;
         }
 
         .token-code .value {
-            font-size: 0.95rem;
+            font-size: clamp(2.2rem, 3.4vw, 3rem);
             font-weight: 800;
-            color: #ffffff;
-            text-shadow: 0 1px 8px rgba(15, 23, 42, 0.35);
+            color: #2f6fdf;
+            text-shadow: none;
             font-variant-numeric: tabular-nums;
+            line-height: 1;
         }
 
         .token-code.hidden .value {
@@ -371,24 +356,27 @@
         }
 
         .hero-meta {
-            margin-top: 8px;
-            font-size: 0.75rem;
-            opacity: 0.8;
+            margin-top: 14px;
+            font-size: 1rem;
+            opacity: 1;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 16px;
             flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
+            color: #2f476f;
         }
 
         .status-indicator {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 8px;
         }
 
         .indicator-dot {
-            width: 5px;
-            height: 5px;
+            width: 12px;
+            height: 12px;
             border-radius: 999px;
         }
 
@@ -480,7 +468,7 @@
         }
 
         .content {
-            padding: 12px;
+            padding: 14px 0 12px;
             display: grid;
             gap: 10px;
             flex: 1;
@@ -598,6 +586,11 @@
         .server-icon.backup2 {
             background: #d8f7f2;
             color: #0ea5a5;
+        }
+
+        .server-icon.custom {
+            background: #e2e8f0;
+            color: #334155;
         }
 
         .server-info {
@@ -892,14 +885,19 @@
         }
 
         @media (max-width: 640px) {
-            .brand-title { font-size: 1.1rem; }
-            .hero-title { font-size: 1rem; }
-            .hero { padding: 12px; }
+            body { padding: 10px; }
+            .brand-title { font-size: 1.45rem; }
+            .brand-subtitle { font-size: 0.85rem; }
+            .hero-title { font-size: 1.9rem; }
+            .hero-subtitle { font-size: 1rem; }
+            .hero-panel { padding: 16px; }
             .hero-top { margin-bottom: 8px; }
-            .token-code { font-size: 0.75rem; padding: 5px 8px; }
-            .token-code .label { font-size: 0.65rem; }
-            .token-code .value { font-size: 0.85rem; }
-            .refresh-btn { padding: 5px 8px; font-size: 0.65rem; }
+            .token-code { min-width: 132px; padding: 10px 12px; }
+            .token-code .label { font-size: 0.72rem; }
+            .token-code .value { font-size: 1.7rem; }
+            .refresh-btn, .install-btn, .kiosk-btn { padding: 8px 12px; font-size: 0.72rem; }
+            .settings-toggle { width: 38px; height: 38px; }
+            .hero-meta { font-size: 0.86rem; gap: 8px; }
         }
 
         @media (max-width: 420px) {
@@ -928,10 +926,12 @@
                 </div>
                 <div class="hero-actions">
                     <button id="kiosk-btn" class="kiosk-btn" type="button" title="Aktifkan layar penuh">
-                        Mode Kiosk
+                        <span class="action-ic">🖥</span>
+                        <span>Mode Kiosk</span>
                     </button>
                     <button id="install-btn" class="install-btn" type="button" title="Install aplikasi Exambro">
-                        Install App
+                        <span class="action-ic">⬇</span>
+                        <span>Install App</span>
                     </button>
                     <button id="refresh-btn" class="refresh-btn" title="Refresh data">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2">
@@ -970,84 +970,86 @@
                 </div>
             </div>
 
-            <div class="hero-info">
-                <div class="hero-left">
-                    <h2 class="hero-title">Pilih Server Ujian</h2>
-                    <p class="hero-subtitle">
-                        <span style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-                            <span id="token-indicator" class="indicator-dot" style="display: inline-block;"></span>
-                            <strong id="token-status" style="font-size: 0.95rem;">Token Status: -</strong>
-                        </span>
-                        Ketuk server yang tersedia untuk memulai koneksi
-                    </p>
-                </div>
-                <div class="hero-right">
-                    <div class="token-code" id="token-code">
-                        <span class="label">PIN EXIT</span>
-                        <span class="value" id="token-value">......</span>
+            <div class="hero-panel">
+                <div class="hero-info">
+                    <div class="hero-left">
+                        <h2 class="hero-title">Pilih Server Ujian</h2>
+                        <p class="hero-subtitle">
+                            <span style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight:700; color:#10b981;">
+                                <span id="token-indicator-main" class="indicator-dot" style="display: inline-block;"></span>
+                                <strong id="token-status-main" style="font-size: 1.02rem;">-</strong>
+                            </span>
+                            Ketuk server yang tersedia untuk memulai koneksi
+                        </p>
+                    </div>
+                    <div class="hero-right">
+                        <div class="token-code" id="token-code">
+                            <span class="label">PIN EXIT</span>
+                            <span class="value" id="token-value">......</span>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="hero-meta">
-                <div class="status-indicator">
-                    <span style="font-weight: 700;">Token:</span>
-                    <span class="indicator-dot" id="token-indicator"></span>
-                    <span id="token-status" style="font-weight: 600;">-</span>
+                <div class="hero-meta">
+                    <div class="status-indicator">
+                        <span style="font-weight: 700;">Token:</span>
+                        <span class="indicator-dot" id="token-indicator"></span>
+                        <span id="token-status" style="font-weight: 700;">-</span>
+                    </div>
+                    <span>•</span>
+                    <div id="cbt-token-note" style="font-weight: 700;">Token Soal: -</div>
+                    <span>•</span>
+                    <span id="checked-at" style="font-size: 0.92rem;">Dicek: -</span>
                 </div>
-                <span>•</span>
-                <div id="cbt-token-note" style="font-weight: 600;">Token Soal: -</div>
-                <span>•</span>
-                <span id="checked-at" style="font-size: 0.72rem;">Dicek: -</span>
-            </div>
 
-            @if (!empty($canTogglePinVisibility) && $canTogglePinVisibility === true)
-                <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.15); border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);">
-                    <p style="margin: 0 0 10px 0; font-weight: 700; font-size: 0.73rem; opacity: 0.9; text-transform: uppercase; color: #fff;">⚙️ Admin Controls - 3 Setting Terpisah:</p>
+                @if (!empty($canTogglePinVisibility) && $canTogglePinVisibility === true)
+                <div style="margin-top: 16px; padding: 16px; background: rgba(255,255,255,0.55); border-radius: 14px; border: 1px solid #d0dceb; position: relative; z-index:1;">
+                    <p style="margin: 0 0 12px 0; font-weight: 800; font-size: 1rem; text-transform: uppercase; color: #506180; letter-spacing:0.02em;">Admin Controls - 3 Setting Terpisah</p>
                     
                     <!-- 1. TOKEN EXAMBRO STATUS (FUNCTIONALITY) -->
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.08); border-radius: 6px;">
-                        <span style="background: var(--accent-start); border-radius: 4px; padding: 4px 8px; font-weight: 700; font-size: 0.65rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #ffffff; border-radius: 10px; border:1px solid #d8e2ef;">
+                        <span style="background: #2f6fdf; color:#fff; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.78rem; min-width: 90px; text-align: center; white-space: nowrap;">
                             🔐 TOKEN
                         </span>
-                        <span style="font-size: 0.65rem; font-weight: 600; opacity: 0.9;">Fungsionalitas</span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color:#5d6f8f;">Fungsionalitas</span>
                         <form action="{{ route('cbt.exambro.toggle') }}" method="post" style="margin: 0; flex: 1;">
                             @csrf
-                            <button type="submit" id="token-toggle-btn" style="width: 100%; background: rgba(255,255,255,0.2); color: #fff; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 300ms;">
+                            <button type="submit" id="token-toggle-btn" style="width: 100%; background: #fee2e2; color: #dc2626; border: 0; border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 300ms;">
                                 Memuat...
                             </button>
                         </form>
                     </div>
                     
                     <!-- 2. PIN EXAMBRO STATUS (FUNCTIONALITY) -->
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.08); border-radius: 6px;">
-                        <span style="background: #ec4899; border-radius: 4px; padding: 4px 8px; font-weight: 700; font-size: 0.65rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #ffffff; border-radius: 10px; border:1px solid #d8e2ef;">
+                        <span style="background: #ef5b7d; color:#fff; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.78rem; min-width: 90px; text-align: center; white-space: nowrap;">
                             📌 PIN
                         </span>
-                        <span style="font-size: 0.65rem; font-weight: 600; opacity: 0.9;">Status</span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color:#5d6f8f;">Status</span>
                         <form action="{{ route('cbt.exambro.pin.toggle') }}" method="post" style="margin: 0; flex: 1;">
                             @csrf
-                            <button type="submit" id="pin-toggle-btn" style="width: 100%; background: rgba(255,255,255,0.2); color: #fff; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 300ms;">
+                            <button type="submit" id="pin-toggle-btn" style="width: 100%; background: #dcfce7; color: #16a34a; border: 0; border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 300ms;">
                                 {{ !empty($exambroPinActive) && $exambroPinActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN' }}
                             </button>
                         </form>
                     </div>
                     
                     <!-- 3. PIN VISIBILITY (DISPLAY ONLY) -->
-                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.08); border-radius: 6px;">
-                        <span style="background: #0ea5a5; border-radius: 4px; padding: 4px 8px; font-weight: 700; font-size: 0.65rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #ffffff; border-radius: 10px; border:1px solid #d8e2ef;">
+                        <span style="background: #10b981; color:#fff; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.78rem; min-width: 90px; text-align: center; white-space: nowrap;">
                             👁️ TAMPIL
                         </span>
-                        <span style="font-size: 0.65rem; font-weight: 600; opacity: 0.9;">Display</span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color:#5d6f8f;">Display</span>
                         <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0; flex: 1;">
                             @csrf
-                            <button type="submit" style="width: 100%; background: rgba(255,255,255,0.2); color: #fff; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 300ms;">
+                            <button type="submit" style="width: 100%; background: #dbeafe; color: #2f6fdf; border: 0; border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 300ms;">
                                 {{ !empty($exambroTokenVisibleOnPage) && $exambroTokenVisibleOnPage ? '🙈 Sembunyikan' : '👁️ Tampilkan' }}
                             </button>
                         </form>
                     </div>
                 </div>
-            @endif
+                @endif
+            </div>
         </header>
 
         <section class="content" id="server-list"></section>
@@ -1091,7 +1093,7 @@
                         <span class="monitor-value normal js-lokasi-server">-</span>
                     </li>
                     <li class="monitor-item">
-                        <span class="monitor-label">Peserta Login</span>
+                        <span class="monitor-label">Peserta Aktif (2m)</span>
                         <span class="monitor-value normal js-peserta-login">0 / 40</span>
                     </li>
                     <li class="monitor-item">
@@ -1113,42 +1115,9 @@
         // ============================================
         // Configuration & State
         // ============================================
-        const urlParams = new URLSearchParams(window.location.search || '');
-        const initialKeyFromQuery = (urlParams.get('key') || '').trim();
-        const keyFromStorage = (function () {
-            try {
-                return window.localStorage.getItem('exambro_api_key') || '';
-            } catch (e) {
-                return '';
-            }
-        })();
-
-        const resolvedApiKey = (initialKeyFromQuery || keyFromStorage || '').trim();
-
-        if (resolvedApiKey) {
-            try {
-                window.localStorage.setItem('exambro_api_key', resolvedApiKey);
-            } catch (e) {
-                // Ignore storage errors.
-            }
-
-            try {
-                window.sessionStorage.setItem('exambro_api_key', resolvedApiKey);
-            } catch (e) {
-                // Ignore storage errors.
-            }
-
-            try {
-                const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
-                document.cookie = 'exambro_key=' + encodeURIComponent(resolvedApiKey) + '; Path=/; Max-Age=2592000; SameSite=Lax' + secureFlag;
-            } catch (e) {
-                // Ignore cookie write errors.
-            }
-        }
-
         const config = {
-            apiKey: resolvedApiKey,
             apiBase: '{{ url("api/exambro-info") }}',
+            heartbeatBase: '{{ url("api/server-presence/heartbeat") }}',
             connectBase: '{{ url("exambro/connect") }}',
             reverseProxyBase: '{{ route("cbt.lb") }}',
             refreshInterval: 900000,
@@ -1181,6 +1150,8 @@
             tokenValue: document.getElementById('token-value'),
             tokenIndicator: document.getElementById('token-indicator'),
             tokenStatus: document.getElementById('token-status'),
+            tokenIndicatorMain: document.getElementById('token-indicator-main'),
+            tokenStatusMain: document.getElementById('token-status-main'),
             cbtTokenNote: document.getElementById('cbt-token-note'),
             checkedAt: document.getElementById('checked-at'),
             footerNote: document.getElementById('footer-note')
@@ -1228,17 +1199,48 @@
             return clampPercent((Number(loginCount || 0) / safeCapacity) * 100);
         }
 
-        function buildKeyQuery() {
-            return config.apiKey ? ('?key=' + encodeURIComponent(config.apiKey)) : '';
-        }
-
-        function connectToServer(serverKey, useReverseProxy) {
-            if (useReverseProxy) {
-                window.location.href = config.reverseProxyBase + buildKeyQuery();
+        function sendServerHeartbeat(serverKey) {
+            const cleanKey = (serverKey || '').trim();
+            if (!cleanKey) {
                 return;
             }
 
-            window.location.href = config.connectBase + '/' + encodeURIComponent(serverKey) + buildKeyQuery();
+            const endpoint = config.heartbeatBase;
+            const payload = JSON.stringify({ server_key: cleanKey });
+
+            if (navigator.sendBeacon) {
+                try {
+                    const blob = new Blob([payload], { type: 'application/json' });
+                    navigator.sendBeacon(endpoint, blob);
+                    return;
+                } catch (e) {
+                    // Fallback to fetch keepalive below.
+                }
+            }
+
+            fetch(endpoint, {
+                method: 'POST',
+                keepalive: true,
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: payload
+            }).catch(() => {
+                // Ignore heartbeat errors to keep UX fast.
+            });
+        }
+
+        function connectToServer(serverKey, useReverseProxy) {
+            sendServerHeartbeat(serverKey);
+
+            if (useReverseProxy) {
+                window.location.href = config.reverseProxyBase;
+                return;
+            }
+
+            window.location.href = config.connectBase + '/' + encodeURIComponent(serverKey);
         }
 
         function createAlert(type, message) {
@@ -1288,7 +1290,7 @@
 
         elements.intervalInput.addEventListener('change', () => {
             const val = parseInt(elements.intervalInput.value, 10);
-            if (val >= 5 && val <= 120) {
+            if (val >= 30 && val <= 900) {
                 config.refreshInterval = val * 1000;
                 rescheduleRefresh();
             } else {
@@ -1386,12 +1388,19 @@
             // Update token indicator
             elements.tokenIndicator.className = 'indicator-dot ' + (tokenActive ? 'active' : 'inactive');
             elements.tokenStatus.textContent = tokenActive ? 'AKTIF' : 'NON-AKTIF';
+            if (elements.tokenIndicatorMain) {
+                elements.tokenIndicatorMain.className = 'indicator-dot ' + (tokenActive ? 'active' : 'inactive');
+            }
+            if (elements.tokenStatusMain) {
+                elements.tokenStatusMain.textContent = tokenActive ? 'AKTIF' : 'NON-AKTIF';
+            }
 
             // Update token toggle button
             const tokenToggleBtn = document.getElementById('token-toggle-btn');
             if (tokenToggleBtn) {
                 tokenToggleBtn.textContent = tokenActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN';
-                tokenToggleBtn.style.background = tokenActive ? 'rgba(217, 71, 71, 0.4)' : 'rgba(16, 168, 86, 0.4)';
+                tokenToggleBtn.style.background = tokenActive ? '#fee2e2' : '#dcfce7';
+                tokenToggleBtn.style.color = tokenActive ? '#dc2626' : '#16a34a';
             }
 
             // Update PIN/Token code
@@ -1434,7 +1443,7 @@
                     core: Number(s.core || 4),
                     ram: s.ram || '8 GB',
                     capacity: Number(s.capacity || 40),
-                    loginCount: Number(s.login_count || 0),
+                    loginCount: Number((s.active_user_count ?? s.login_count) || 0),
                     loginIndicator: s.login_indicator || 'low',
                     loginIndicatorLabel: s.login_indicator_label || 'Rendah'
                 }))
@@ -1449,7 +1458,8 @@
                 const card = template.content.firstElementChild.cloneNode(true);
 
                 const icon = card.querySelector('.server-icon');
-                icon.classList.add(server.key);
+                const iconClass = ['primary', 'backup1', 'backup2'].includes(server.key) ? server.key : 'custom';
+                icon.classList.add(iconClass);
                 icon.innerHTML = serverIconSvg();
 
                 card.querySelector('.server-name').textContent = server.label;
@@ -1560,11 +1570,29 @@
 
             const url = config.apiBase + (config.apiBase.indexOf('?') !== -1 ? '&' : '?') + '_t=' + Date.now();
 
-            fetch(url, {
+            let safeUrl;
+            try {
+                safeUrl = new URL(url, window.location.origin);
+            } catch (e) {
+                elements.serverList.innerHTML = '';
+                elements.serverList.appendChild(createAlert('error', '❌ URL API tidak valid.'));
+                elements.footerNote.textContent = '✗ Gagal terhubung • Coba muat ulang';
+                setLoading(false);
+                return;
+            }
+
+            if (safeUrl.origin !== window.location.origin) {
+                elements.serverList.innerHTML = '';
+                elements.serverList.appendChild(createAlert('error', '❌ Request lintas domain diblokir untuk keamanan.'));
+                elements.footerNote.textContent = '✗ Gagal terhubung • Cek konfigurasi API';
+                setLoading(false);
+                return;
+            }
+
+            fetch(safeUrl.toString(), {
                 cache: 'no-store',
                 headers: {
-                    'Accept': 'application/json',
-                    'X-Exambro-Key': config.apiKey
+                    'Accept': 'application/json'
                 }
             })
                 .then(response => {

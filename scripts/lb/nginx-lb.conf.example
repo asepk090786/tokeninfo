@@ -1,0 +1,51 @@
+# Nginx Load Balancer example for 4 Laravel backends
+# Place this on LB server at: /etc/nginx/sites-available/token-lb.conf
+# Then symlink to sites-enabled and reload nginx.
+
+upstream token_exam_backend {
+    # Choose ONE balancing method:
+    least_conn;
+    # ip_hash;  # Alternative sticky-by-client-IP (uncomment if needed)
+
+    # Backend app nodes
+    server 10.10.10.11:80 max_fails=3 fail_timeout=10s;
+    server 10.10.10.12:80 max_fails=3 fail_timeout=10s;
+    server 10.10.10.13:80 max_fails=3 fail_timeout=10s;
+    server 10.10.10.14:80 max_fails=3 fail_timeout=10s;
+
+    keepalive 64;
+}
+
+server {
+    listen 80;
+    server_name token.sman1pontang.biz.id;
+
+    # If SSL is terminated elsewhere, this block can remain HTTP only.
+    # If SSL is on this LB, add a separate :443 server block with certs.
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+
+        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+        proxy_next_upstream_tries 3;
+
+        proxy_pass http://token_exam_backend;
+    }
+
+    # Optional: quick LB health endpoint
+    location = /lb-health {
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+}

@@ -12,7 +12,6 @@ import com.exambro.client.databinding.ActivitySetupBinding
  *
  * Pengawas/admin mengisi:
  *  • URL Server (contoh: https://examinfo.belajar2026.net)
- *  • API Key Exambro (exb_xxxx...)
  *  • PIN keluar mode kunci
  *  • Toggle mode kunci (lock mode)
  */
@@ -40,14 +39,12 @@ class SetupActivity : AppCompatActivity() {
         binding.etServerUrl.setText(
             prefs.getString(MainActivity.KEY_SERVER_URL, "https://examinfo.belajar2026.net")
         )
-        binding.etApiKey.setText(prefs.getString(MainActivity.KEY_API_KEY, ""))
         binding.etExitPin.setText(prefs.getString(MainActivity.KEY_EXIT_PIN, ""))
         binding.switchLockMode.isChecked = prefs.getBoolean(MainActivity.KEY_LOCK_MODE, true)
     }
 
     private fun saveAndLaunch() {
         val serverUrl = binding.etServerUrl.text.toString().trim()
-        val apiKey    = binding.etApiKey.text.toString().trim()
         val exitPin   = binding.etExitPin.text.toString().trim()
         val lockMode  = binding.switchLockMode.isChecked
 
@@ -76,7 +73,6 @@ class SetupActivity : AppCompatActivity() {
         // Simpan
         prefs().edit()
             .putString(MainActivity.KEY_SERVER_URL, serverUrl)
-            .putString(MainActivity.KEY_API_KEY, apiKey)
             .putString(MainActivity.KEY_EXIT_PIN, exitPin)
             .putBoolean(MainActivity.KEY_LOCK_MODE, lockMode)
             .apply()
@@ -88,7 +84,6 @@ class SetupActivity : AppCompatActivity() {
 
     private fun resetDefaults() {
         binding.etServerUrl.setText("https://examinfo.belajar2026.net")
-        binding.etApiKey.setText("")
         binding.etExitPin.setText("")
         binding.switchLockMode.isChecked = true
         Toast.makeText(this, "Direset ke default", Toast.LENGTH_SHORT).show()

@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Exambro Client - Interactive Dashboard</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
@@ -758,9 +756,8 @@
         // Configuration & State
         // ============================================
         const config = {
-            apiKey: '{{ addslashes(request()->query("key", "")) }}',
             apiBase: '{{ url("api/exambro-info") }}',
-            refreshInterval: 20000,
+            refreshInterval: 60000,
             autoRefresh: true,
             parseTokenStatus: parseTokenStatusValue,
             parseWarningStatus: parseWarningStatusValue
@@ -856,7 +853,7 @@
 
         elements.intervalInput.addEventListener('change', () => {
             const val = parseInt(elements.intervalInput.value, 10);
-            if (val >= 5 && val <= 120) {
+            if (val >= 30 && val <= 600) {
                 config.refreshInterval = val * 1000;
                 rescheduleRefresh();
             } else {
@@ -969,11 +966,29 @@
 
             const url = config.apiBase + (config.apiBase.indexOf('?') !== -1 ? '&' : '?') + '_t=' + Date.now();
 
-            fetch(url, {
+            let safeUrl;
+            try {
+                safeUrl = new URL(url, window.location.origin);
+            } catch (e) {
+                elements.serverList.innerHTML = '';
+                elements.serverList.appendChild(createAlert('error', '❌ URL API tidak valid.'));
+                elements.footerNote.textContent = '✗ Gagal terhubung • Coba muat ulang';
+                setLoading(false);
+                return;
+            }
+
+            if (safeUrl.origin !== window.location.origin) {
+                elements.serverList.innerHTML = '';
+                elements.serverList.appendChild(createAlert('error', '❌ Request lintas domain diblokir untuk keamanan.'));
+                elements.footerNote.textContent = '✗ Gagal terhubung • Cek konfigurasi API';
+                setLoading(false);
+                return;
+            }
+
+            fetch(safeUrl.toString(), {
                 cache: 'no-store',
                 headers: {
-                    'Accept': 'application/json',
-                    'X-Exambro-Key': config.apiKey
+                    'Accept': 'application/json'
                 }
             })
                 .then(response => {

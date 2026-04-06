@@ -58,14 +58,13 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val PREFS_NAME     = "exambro_prefs"
         const val KEY_SERVER_URL = "server_url"
-        const val KEY_API_KEY    = "api_key"
         const val KEY_EXIT_PIN   = "exit_pin"
         const val KEY_LOCK_MODE  = "lock_mode"
 
         /**
          * User-Agent mengandung kata "exambro" agar middleware server
          * (ExambroApiKey.php · matchesExambroUserAgent) mengizinkan akses
-         * tanpa perlu menyertakan API key secara manual.
+         * tanpa perlu kredensial tambahan di URL.
          */
         private const val EXAMBRO_UA =
             "Mozilla/5.0 (Linux; Android 12; ExambroCBT) " +
@@ -284,7 +283,6 @@ class MainActivity : AppCompatActivity() {
     private fun loadPage() {
         hideError()
         val serverUrl = prefs.getString(KEY_SERVER_URL, "") ?: ""
-        val apiKey    = prefs.getString(KEY_API_KEY, "") ?: ""
 
         if (serverUrl.isEmpty()) { goToSetup(); return }
 
@@ -296,10 +294,6 @@ class MainActivity : AppCompatActivity() {
         val url = buildString {
             append(serverUrl.trimEnd('/'))
             append("/exambro")
-            if (apiKey.isNotEmpty()) {
-                append("?key=")
-                append(android.net.Uri.encode(apiKey))
-            }
         }
 
         binding.webView.loadUrl(url)

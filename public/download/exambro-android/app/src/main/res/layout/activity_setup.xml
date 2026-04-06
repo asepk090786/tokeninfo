@@ -88,27 +88,10 @@
 
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    android:hint="API Key Exambro (opsional)">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etApiKey"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="textVisiblePassword"
-                        android:fontFamily="monospace"
-                        android:imeOptions="actionNext"
-                        android:singleLine="true" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Jika User-Agent Exambro sudah dikenali oleh server, API Key tidak wajib diisi."
+                    android:text="Autentikasi aplikasi mengikuti User-Agent Exambro (tanpa input kredensial tambahan)."
                     android:textSize="12sp"
                     android:textColor="#94a3b8"
                     android:layout_marginTop="6dp" />
