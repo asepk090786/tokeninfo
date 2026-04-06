@@ -19,6 +19,7 @@ class CbtInfoController extends Controller
     private const SERVER_ACTIVE_MEMBER_PREFIX = 'server_active_member:';
     private const SERVER_ACTIVE_INDEX_PREFIX = 'server_active_index:';
     private const SERVER_ACTIVE_USER_TTL_SECONDS = 120;
+    private const SERVER_LOGIN_COUNTER_TTL_SECONDS = 7200;
     private const DB_REFRESH_INTERVAL_SECONDS = 300;
     private const SERVER_STATUS_UP_TTL_SECONDS = 300;
     private const SERVER_STATUS_DOWN_TTL_SECONDS = 120;
@@ -1333,35 +1334,42 @@ class CbtInfoController extends Controller
 
     private function selectAvailableServer(array $servers): array
     {
-        $preferredServers = array_values(array_filter($servers, function ($server) {
-            return (($server['is_up'] ?? false) === true)
-                && ! empty($server['url'])
-                && ! $this->isServerHighLoad((array) $server);
+        $upServers = array_values(array_filter($servers, function ($server) {
+            return (($server['is_up'] ?? false) === true) && ! empty($server['url']);
         }));
 
-        if ($preferredServers !== []) {
-            usort($preferredServers, function ($left, $right) {
-                $leftCapacity = max(1, (int) ($left['capacity'] ?? 1));
-                $rightCapacity = max(1, (int) ($right['capacity'] ?? 1));
-                $leftRatio = max(0, (int) ($left['login_count'] ?? 0)) / $leftCapacity;
-                $rightRatio = max(0, (int) ($right['login_count'] ?? 0)) / $rightCapacity;
+        if ($upServers !== []) {
+            usort($upServers, function ($left, $right) {
+                $leftRatio = $this->serverLoadRatio((array) $left);
+                $rightRatio = $this->serverLoadRatio((array) $right);
 
                 return $leftRatio <=> $rightRatio;
             });
 
-            return $preferredServers[0];
+            // Prefer server yang tidak high load dengan rasio paling kecil.
+            foreach ($upServers as $server) {
+                if (! $this->isServerHighLoad((array) $server)) {
+                    return $server;
+                }
+            }
+
+            // Jika semua high load, tetap pilih yang paling ringan (least bad), bukan first-up acak.
+            return $upServers[0];
         }
 
-        foreach ($servers as $server) {
-            if (($server['is_up'] ?? false) === true && ! empty($server['url'])) {
-                return $server;
-            }
-        }
+        $serversWithUrl = array_values(array_filter($servers, function ($server) {
+            return ! empty($server['url']);
+        }));
 
-        foreach ($servers as $server) {
-            if (! empty($server['url'])) {
-                return $server;
-            }
+        if ($serversWithUrl !== []) {
+            usort($serversWithUrl, function ($left, $right) {
+                $leftRatio = $this->serverLoadRatio((array) $left);
+                $rightRatio = $this->serverLoadRatio((array) $right);
+
+                return $leftRatio <=> $rightRatio;
+            });
+
+            return $serversWithUrl[0];
         }
 
         return [
@@ -1442,16 +1450,20 @@ class CbtInfoController extends Controller
         }
 
         $key = $this->serverLoginCacheKey($serverKey);
+        $ttl = now()->addSeconds(self::SERVER_LOGIN_COUNTER_TTL_SECONDS);
 
         if (! Cache::has($key)) {
-            Cache::forever($key, 0);
+            Cache::put($key, 0, $ttl);
         }
 
         $nextCount = Cache::increment($key);
-        if (! is_int($nextCount) && ! is_float($nextCount)) {
-            $fallbackCount = $this->getServerLoginCount($serverKey) + 1;
-            Cache::forever($key, $fallbackCount);
+        if (is_int($nextCount) || is_float($nextCount)) {
+            Cache::put($key, max(0, (int) $nextCount), $ttl);
+            return;
         }
+
+        $fallbackCount = $this->getServerLoginCount($serverKey) + 1;
+        Cache::put($key, $fallbackCount, $ttl);
     }
 
     private function serverActiveMemberCacheKey(string $serverKey, string $memberId): string
@@ -1555,10 +1567,18 @@ class CbtInfoController extends Controller
 
     private function isServerHighLoad(array $server): bool
     {
+        return $this->serverLoadRatio($server) >= 0.9;
+    }
+
+    private function serverLoadRatio(array $server): float
+    {
         $capacity = max(1, (int) ($server['capacity'] ?? 1));
+        $activeUserCount = (int) ($server['active_user_count'] ?? -1);
         $loginCount = max(0, (int) ($server['login_count'] ?? 0));
 
-        return ($loginCount / $capacity) >= 0.9;
+        $currentLoadCount = $activeUserCount >= 0 ? max(0, $activeUserCount) : $loginCount;
+
+        return $currentLoadCount / $capacity;
     }
 
     private function extractCountryCodeFromUrl(?string $url): string
