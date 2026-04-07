@@ -25,3 +25,7 @@ Thumbs.db
 
 # SSL ACME challenge files are generated per server/environment.
 /public/.well-known/acme-challenge/*
+
+# Local deployment artifacts
+/backup1.tar.gz
+/token.sman1-pontang.sch.id/
