@@ -672,6 +672,14 @@
 
             <div class="sidebar-actions">
                 <a class="link-btn btn-soft" href="{{ route('cbt.index') }}">Lihat Halaman Home</a>
+                <button
+                    id="btn-flush-cache"
+                    type="button"
+                    class="btn-soft"
+                    style="width:100%;text-align:center;"
+                    onclick="flushCacheFromAdmin()"
+                >Sync Token dari DB</button>
+                <span id="flush-result" style="display:none;font-size:0.82rem;padding:6px 8px;border-radius:8px;text-align:center;"></span>
             </div>
 
             <form class="logout-form" action="{{ route('cbt.admin.logout') }}" method="post">
@@ -1171,6 +1179,47 @@
                 });
             }
         })();
+    </script>
+
+    <script>
+        function flushCacheFromAdmin() {
+            var btn = document.getElementById('btn-flush-cache');
+            var result = document.getElementById('flush-result');
+            btn.disabled = true;
+            btn.textContent = 'Memproses...';
+
+            fetch('{{ route('cbt.admin.flush-cache') }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                result.style.display = 'block';
+                if (data.status === 'ok') {
+                    result.style.background = '#ecfdf5';
+                    result.style.color = '#047857';
+                    result.textContent = 'Cache di-refresh! Token terbaru dari DB aktif.';
+                } else {
+                    result.style.background = '#fef2f2';
+                    result.style.color = '#b91c1c';
+                    result.textContent = data.message || 'Gagal refresh cache.';
+                }
+            })
+            .catch(function () {
+                result.style.display = 'block';
+                result.style.background = '#fef2f2';
+                result.style.color = '#b91c1c';
+                result.textContent = 'Gagal terhubung ke server.';
+            })
+            .finally(function () {
+                btn.disabled = false;
+                btn.textContent = 'Sync Token dari DB';
+            });
+        }
     </script>
 </body>
 </html>

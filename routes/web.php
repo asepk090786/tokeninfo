@@ -153,4 +153,5 @@ Route::post('/admin/server', [CbtInfoController::class, 'addServer'])->name('cbt
 Route::post('/admin/server/{key}', [CbtInfoController::class, 'updateServerSettings'])->name('cbt.server.update');
 Route::post('/admin/server/{key}/visibility-toggle', [CbtInfoController::class, 'toggleServerVisibility'])->name('cbt.server.visibility.toggle');
 Route::post('/admin/server/{key}/delete', [CbtInfoController::class, 'deleteServer'])->name('cbt.server.delete');
+Route::post('/admin/flush-cache', [CbtInfoController::class, 'flushCache'])->name('cbt.admin.flush-cache');
 Route::post('/admin/logout', [CbtInfoController::class, 'logout'])->name('cbt.admin.logout');

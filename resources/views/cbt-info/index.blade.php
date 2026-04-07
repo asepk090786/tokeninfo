@@ -141,30 +141,44 @@
             font-size: 0.9rem;
         }
 
-        .server-grid {
+        .server-layout {
             margin-top: 14px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: 230px 1fr;
             gap: 14px;
+            align-items: start;
         }
 
-        .server-card {
+        .single-qr {
             border-radius: 14px;
             border: 1px solid var(--line);
             background: #fff;
-            padding: 14px 14px 12px;
+            padding: 12px;
             display: grid;
-            grid-template-rows: auto auto 1fr;
-            gap: 12px;
-            min-height: 348px;
+            gap: 10px;
+            place-items: center;
         }
 
-        .server-card.up {
+        .server-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .server-item {
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #fff;
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .server-item.up {
             background: #f0fdf4;
             border-color: #bbf7d0;
         }
 
-        .server-card.down {
+        .server-item.down {
             background: #fff1f2;
             border-color: #fecdd3;
         }
@@ -219,7 +233,7 @@
 
         .server-qrcode {
             width: 100%;
-            max-width: 210px;
+            max-width: 200px;
             aspect-ratio: 1 / 1;
             margin: 0 auto;
             border: 1px solid var(--line);
@@ -246,7 +260,7 @@
             padding: 12px;
             display: grid;
             place-items: center;
-            min-height: 210px;
+            min-height: 200px;
         }
 
         .actions {
@@ -301,9 +315,9 @@
         @media (max-width: 860px) {
             body { padding: 14px; }
             .status-strip { grid-template-columns: 1fr; }
-            .server-grid { grid-template-columns: 1fr; }
+            .server-layout { grid-template-columns: 1fr; }
             .hero { border-radius: 16px; padding: 18px; }
-            .server-card { min-height: 0; }
+            .server-stats { font-size: 0.8rem; }
         }
     </style>
 </head>
@@ -318,8 +332,8 @@
         <section class="status-strip">
             <article class="strip-card">
                 <p class="strip-label">Token CBT</p>
-                <p class="strip-value">{{ $info->cbt_token }}</p>
-                <p class="strip-meta">
+                <p class="strip-value" id="token-cbt-value">{{ $info->cbt_token }}</p>
+                <p class="strip-meta" id="token-cbt-meta">
                     @if (!empty($info->token_valid_until))
                         Berlaku sampai {{ $info->token_valid_until }}
                     @elseif (!empty($info->token_updated_at))
@@ -344,10 +358,24 @@
 
         <section class="server-section">
             <h2 class="server-title">Daftar Server CBT</h2>
-            <p class="server-note">Scan QR pada server yang statusnya UP untuk akses cepat.</p>
-            <div class="server-grid">
-                @foreach ($servers as $server)
-                    <article class="server-card {{ $server['status_class'] }}">
+            <p class="server-note">Semua QR mengarah ke halaman Exambro untuk akses cepat.</p>
+            @php
+                $singleQr = collect($servers)->pluck('qr_svg')->filter()->first();
+            @endphp
+            <div class="server-layout">
+                <div class="single-qr">
+                    @if (!empty($singleQr))
+                        <div class="server-qrcode" aria-label="QR Exambro">
+                            {!! $singleQr !!}
+                        </div>
+                    @else
+                        <p class="server-qr-note">QR belum tersedia.</p>
+                    @endif
+                </div>
+
+                <div class="server-list">
+                    @foreach ($servers as $server)
+                        <article class="server-item {{ $server['status_class'] }}">
                         <div class="server-head">
                             <h3 class="server-name">{{ $server['name'] }}</h3>
                             <span class="badge {{ $server['status_class'] }}">{{ $server['status_label'] }}</span>
@@ -356,15 +384,9 @@
                             <span>Core {{ $server['core'] }} • RAM {{ $server['ram'] }}</span>
                             <span>{{ $server['active_user_count'] ?? $server['login_count'] }} / {{ $server['capacity'] }} peserta aktif (2m)</span>
                         </div>
-                        @if (!empty($server['qr_svg']))
-                            <div class="server-qrcode" aria-label="QR {{ $server['name'] }}">
-                                {!! $server['qr_svg'] !!}
-                            </div>
-                        @else
-                            <p class="server-qr-note">QR hanya tersedia saat server Online.</p>
-                        @endif
-                    </article>
-                @endforeach
+                        </article>
+                    @endforeach
+                </div>
             </div>
         </section>
 
@@ -373,16 +395,46 @@
         </section>
 
         <section class="refresh-bar">
-            <span>Auto-refresh aktif</span>
-            <span>Update berikutnya: <span id="countdown" class="refresh-count">05:00</span></span>
+            <span>Auto-refresh aktif (30 detik)</span>
+            <span>Update berikutnya: <span id="countdown" class="refresh-count">00:30</span></span>
         </section>
     </div>
 
     <script>
         (function () {
-            var total = 300;
+            var total = 30;
             var remaining = total;
             var countdown = document.getElementById('countdown');
+            var tokenEl  = document.getElementById('token-cbt-value');
+            var metaEl   = document.getElementById('token-cbt-meta');
+            var lastToken = tokenEl ? tokenEl.textContent.trim() : '';
+
+            function updateTokenFromApi() {
+                fetch('{{ route('cbt.token.info') }}?_=' + Date.now(), {
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    var newToken = (data.cbt_token || data.token || '').toString().trim();
+                    if (newToken && newToken !== lastToken) {
+                        if (tokenEl) {
+                            tokenEl.textContent = newToken;
+                            tokenEl.style.transition = 'color 0.4s';
+                            tokenEl.style.color = '#059669';
+                            setTimeout(function () { tokenEl.style.color = ''; }, 2000);
+                        }
+                        if (metaEl && data.token_updated_at) {
+                            metaEl.textContent = 'Diperbarui ' + data.token_updated_at;
+                        }
+                        lastToken = newToken;
+                    }
+                    remaining = total;
+                })
+                .catch(function () {
+                    /* Gagal fetch — coba lagi di interval berikutnya */
+                });
+            }
 
             function tick() {
                 var m = Math.floor(remaining / 60);
@@ -390,7 +442,7 @@
                 countdown.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
                 remaining -= 1;
                 if (remaining < 0) {
-                    window.location.reload();
+                    updateTokenFromApi();
                 }
             }
 

@@ -15,6 +15,7 @@ use ZipArchive;
 
 class CbtInfoController extends Controller
 {
+    private const LEGACY_PUBLIC_HOST = 'token.sman1-pontang.sch.id';
     private const SERVER_LOGIN_COUNTER_PREFIX = 'server_login_count:';
     private const SERVER_ACTIVE_MEMBER_PREFIX = 'server_active_member:';
     private const SERVER_ACTIVE_INDEX_PREFIX = 'server_active_index:';
@@ -23,6 +24,8 @@ class CbtInfoController extends Controller
     private const DB_REFRESH_INTERVAL_SECONDS = 300;
     private const SERVER_STATUS_UP_TTL_SECONDS = 300;
     private const SERVER_STATUS_DOWN_TTL_SECONDS = 120;
+    private const SERVER_STATUS_KNOWN_TTL_SECONDS = 1800;
+    private const SERVER_STATUS_LOCK_SECONDS = 5;
     private const CACHE_KEY_CBT_INFO = 'cbt_info_payload';
     private const CACHE_KEY_CBT_TOKEN_ROW = 'cbt_token_row:id:1';
     private const CACHE_KEY_SETTING_ROW = 'setting_row:id:1';
@@ -832,6 +835,21 @@ class CbtInfoController extends Controller
         return redirect()->route('cbt.admin')->with('status', 'Informasi CBT berhasil diperbarui.');
     }
 
+    public function flushCache(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
+        }
+
+        $this->invalidateInfoCaches();
+
+        return response()->json([
+            'status'     => 'ok',
+            'message'    => 'Cache berhasil di-refresh dari database.',
+            'flushed_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function toggleExambro(Request $request)
     {
         if (! session('cbt_admin_auth')) {
@@ -1278,20 +1296,21 @@ class CbtInfoController extends Controller
 
     private function attachCachedQrCodes(array $servers): array
     {
+        $exambroPageUrl = route('cbt.exambro.page');
+
         foreach ($servers as &$server) {
-            $url = trim((string) ($server['url'] ?? ''));
             $server['qr_svg'] = null;
 
-            if ((($server['is_up'] ?? false) !== true) || $url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+            if (! filter_var($exambroPageUrl, FILTER_VALIDATE_URL)) {
                 continue;
             }
 
-            $cacheKey = 'server_qr_svg:' . sha1($url);
-            $server['qr_svg'] = Cache::remember($cacheKey, now()->addDay(), function () use ($url) {
+            $cacheKey = 'server_qr_svg:exambro_page:' . sha1($exambroPageUrl);
+            $server['qr_svg'] = Cache::remember($cacheKey, now()->addDay(), function () use ($exambroPageUrl) {
                 return QrCode::format('svg')
                     ->size(200)
                     ->margin(1)
-                    ->generate($url);
+                    ->generate($exambroPageUrl);
             });
         }
         unset($server);
@@ -1394,23 +1413,46 @@ class CbtInfoController extends Controller
             return false;
         }
 
-        $cacheKey = 'server_up_status:' . sha1($url);
+        $url = $this->normalizeHealthCheckUrl($url);
+
+        $urlHash = sha1($url);
+        $cacheKey = 'server_up_status:' . $urlHash;
+        $knownStatusKey = 'server_up_status_known:' . $urlHash;
+        $lockKey = 'server_up_status_lock:' . $urlHash;
         $cached = Cache::get($cacheKey, null);
         if (is_bool($cached)) {
             return $cached;
         }
 
+        $knownStatus = Cache::get($knownStatusKey, null);
+        if (! Cache::add($lockKey, 1, now()->addSeconds(self::SERVER_STATUS_LOCK_SECONDS))) {
+            return is_bool($knownStatus) ? $knownStatus : false;
+        }
+
         $isUp = false;
 
         try {
-            $response = Http::connectTimeout(1)
-                ->timeout(3)
-                ->withOptions(['allow_redirects' => true, 'http_errors' => false])
-                ->get($url);
+            $connectTimeout = max(1, (int) env('SERVER_HEALTH_CONNECT_TIMEOUT_SECONDS', 1));
+            $requestTimeout = max(1, (int) env('SERVER_HEALTH_TIMEOUT_SECONDS', 2));
 
-            $isUp = $response->successful() || $response->redirect();
+            $httpClient = Http::connectTimeout($connectTimeout)
+                ->timeout($requestTimeout)
+                ->withOptions(['allow_redirects' => true, 'http_errors' => false]);
+
+            // HEAD lebih ringan; jika tidak didukung server, fallback ke GET.
+            $response = $httpClient->head($url);
+            $statusCode = (int) $response->status();
+
+            if (in_array($statusCode, [405, 501], true)) {
+                $response = $httpClient->get($url);
+                $statusCode = (int) $response->status();
+            }
+
+            $isUp = $statusCode > 0 && $statusCode < 500;
         } catch (\Throwable $e) {
             $isUp = false;
+        } finally {
+            Cache::forget($lockKey);
         }
 
         Cache::put(
@@ -1418,8 +1460,39 @@ class CbtInfoController extends Controller
             $isUp,
             now()->addSeconds($isUp ? self::SERVER_STATUS_UP_TTL_SECONDS : self::SERVER_STATUS_DOWN_TTL_SECONDS)
         );
+        Cache::put($knownStatusKey, $isUp, now()->addSeconds(self::SERVER_STATUS_KNOWN_TTL_SECONDS));
 
         return $isUp;
+    }
+
+    private function normalizeHealthCheckUrl(string $url): string
+    {
+        $targetHost = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($targetHost === '' || strcasecmp($targetHost, self::LEGACY_PUBLIC_HOST) !== 0) {
+            return $url;
+        }
+
+        $appUrl = trim((string) config('app.url', ''));
+        if ($appUrl === '' || ! filter_var($appUrl, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+
+        $appScheme = strtolower((string) parse_url($appUrl, PHP_URL_SCHEME));
+        $appHost = strtolower((string) parse_url($appUrl, PHP_URL_HOST));
+        if ($appHost === '' || strcasecmp($appHost, $targetHost) === 0) {
+            return $url;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return $url;
+        }
+
+        $path = isset($parts['path']) ? (string) $parts['path'] : '';
+        $query = isset($parts['query']) ? '?' . (string) $parts['query'] : '';
+        $fragment = isset($parts['fragment']) ? '#' . (string) $parts['fragment'] : '';
+
+        return ($appScheme !== '' ? $appScheme : 'https') . '://' . $appHost . $path . $query . $fragment;
     }
 
     private function serverLoginCacheKey(string $serverKey): string
