@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <node_domain> [main_domain]"
+  exit 1
+fi
+
+NODE_DOMAIN="$1"
+MAIN_DOMAIN_OVERRIDE="${2:-}"
+APP_ROOT="/var/www/token-app"
+SHARED_DIR="$APP_ROOT/shared"
+CLUSTER_ENV="$SHARED_DIR/cluster.env"
+TARGET_ENV="$SHARED_DIR/.env"
+
+if [[ ! -f "$CLUSTER_ENV" ]]; then
+  echo "Missing $CLUSTER_ENV"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$CLUSTER_ENV"
+
+MAIN_DOMAIN="${MAIN_DOMAIN_OVERRIDE:-${MAIN_DOMAIN:-token.sman1pontang.biz.id}}"
+APP_URL="${APP_URL:-https://${MAIN_DOMAIN}}"
+SESSION_DOMAIN="${SESSION_DOMAIN:-.${MAIN_DOMAIN#*.}}"
+
+cat > "$TARGET_ENV" <<EOF
+APP_NAME="${APP_NAME:-CBT Garuda}"
+APP_ENV=${APP_ENV:-production}
+APP_KEY=${APP_KEY:-}
+APP_DEBUG=${APP_DEBUG:-false}
+APP_URL=${APP_URL}
+
+LOG_CHANNEL=${LOG_CHANNEL:-stack}
+LOG_LEVEL=${LOG_LEVEL:-info}
+
+DB_CONNECTION=${DB_CONNECTION:-mysql}
+DB_HOST=${DB_HOST:-127.0.0.1}
+DB_PORT=${DB_PORT:-3306}
+DB_DATABASE=${DB_DATABASE:-garudacbt}
+DB_USERNAME=${DB_USERNAME:-do123}
+DB_PASSWORD=${DB_PASSWORD:-}
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=${FILESYSTEM_DISK:-local}
+QUEUE_CONNECTION=${QUEUE_CONNECTION:-database}
+
+SESSION_DRIVER=${SESSION_DRIVER:-redis}
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=${SESSION_DOMAIN}
+
+CACHE_STORE=${CACHE_STORE:-redis}
+
+REDIS_CLIENT=${REDIS_CLIENT:-phpredis}
+REDIS_HOST=${REDIS_HOST:-127.0.0.1}
+REDIS_PASSWORD=${REDIS_PASSWORD:-null}
+REDIS_PORT=${REDIS_PORT:-6379}
+
+EXAMBRO_API_KEY=${EXAMBRO_API_KEY:-}
+EXAMBRO_EXIT_EMERGENCY_PIN=${EXAMBRO_EXIT_EMERGENCY_PIN:-864209}
+EOF
+
+chown www-data:www-data "$TARGET_ENV"
+chmod 640 "$TARGET_ENV"
+
+echo "[OK] Generated $TARGET_ENV for node=$NODE_DOMAIN main_domain=$MAIN_DOMAIN"

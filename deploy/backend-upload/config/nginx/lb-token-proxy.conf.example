@@ -1,0 +1,40 @@
+# Main LB vhost template for token.sman1pontang.biz.id
+# Fill node IPs first, then nginx -t && systemctl reload nginx
+
+upstream exambro_lb_pool {
+    server 157.10.253.124:443;  # red1
+    server 43.218.228.5:443;    # red2
+    server 16.79.14.217:443;    # red3
+    # server <RED4_IP>:443;     # red4
+    keepalive 8;
+}
+
+server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name token.sman1pontang.biz.id;
+
+    ssl_certificate     /www/server/panel/vhost/cert/token.sman1-pontang.sch.id/fullchain.pem;
+    ssl_certificate_key /www/server/panel/vhost/cert/token.sman1-pontang.sch.id/privkey.pem;
+
+    if ($server_port !~ 443) {
+        rewrite ^(/.*)$ https://$host$1 permanent;
+    }
+
+    location / {
+        proxy_pass https://exambro_lb_pool;
+        proxy_ssl_verify off;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 15s;
+        proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+        proxy_next_upstream_tries 3;
+
+        proxy_set_header Connection "";
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-LB-Pool exambro_lb_pool always;
+    }
+}
