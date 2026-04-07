@@ -51,6 +51,14 @@
             color: var(--muted);
         }
 
+        .school-name {
+            margin-top: 10px;
+            font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+            font-weight: 800;
+            color: var(--ink);
+            line-height: 1.25;
+        }
+
         .alert {
             margin-top: 14px;
             border-radius: 10px;
@@ -128,6 +136,8 @@
 <body>
     <main class="box">
         <h1>Login Admin</h1>
+        <p class="school-name">{{ $schoolName ?? 'GARUDA CBT' }}</p>
+        <p><strong>{{ $appName ?? 'GARUDA CBT' }}</strong></p>
         <p>Gunakan username dan password admin dari database GARUDA CBT.</p>
 
         @if (session('status'))

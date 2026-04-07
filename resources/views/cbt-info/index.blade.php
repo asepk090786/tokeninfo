@@ -3,393 +3,451 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Informasi Token dan URL CBT</title>
+    <title>Informasi CBT</title>
     <style>
         :root {
-            --bg: #f3f8ff;
-            --card: #ffffff;
-            --ink: #0f172a;
-            --muted: #475569;
-            --accent: #0f766e;
-            --accent-2: #0e7490;
-            --line: #dbe4ef;
+            --bg-top: #f4f8ff;
+            --bg-bottom: #ecfdf5;
+            --ink: #10233b;
+            --muted: #4f647d;
+            --panel: #ffffff;
+            --line: #d6e3f2;
+            --brand: #0f766e;
+            --brand-deep: #115e59;
+            --ok: #059669;
+            --down: #be123c;
+            --warn: #ca8a04;
         }
 
         * { box-sizing: border-box; }
 
         body {
             margin: 0;
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            color: var(--ink);
-            background:
-                radial-gradient(circle at 20% 20%, #e0f2fe 0%, transparent 35%),
-                radial-gradient(circle at 80% 10%, #dcfce7 0%, transparent 30%),
-                linear-gradient(160deg, #f8fbff 0%, var(--bg) 70%);
             min-height: 100vh;
-            padding: 24px;
+            color: var(--ink);
+            font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+            background:
+                radial-gradient(circle at 8% 10%, #dbeafe 0%, transparent 34%),
+                radial-gradient(circle at 92% 12%, #dcfce7 0%, transparent 32%),
+                linear-gradient(165deg, var(--bg-top), var(--bg-bottom));
+            padding: 22px;
         }
 
-        .wrapper {
-            width: min(900px, 100%);
+        .shell {
+            width: min(1100px, 100%);
             margin: 0 auto;
+            display: grid;
+            gap: 16px;
         }
 
         .hero {
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            color: #fff;
-            border-radius: 20px;
-            padding: 28px;
-            box-shadow: 0 20px 40px rgba(15, 118, 110, 0.2);
-            animation: fadeInUp 500ms ease-out;
+            background: linear-gradient(130deg, #0f766e, #0e7490);
+            color: #ffffff;
+            border-radius: 24px;
+            padding: 26px;
+            box-shadow: 0 22px 44px rgba(15, 118, 110, 0.24);
         }
 
         .hero h1 {
             margin: 0;
-            font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+            font-size: clamp(1.6rem, 2.4vw, 2.2rem);
             letter-spacing: 0.4px;
         }
 
-        .hero p {
+        .hero .school {
             margin: 10px 0 0;
-            opacity: 0.95;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 18px;
-            margin-top: 20px;
-        }
-
-        .card {
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 20px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-            animation: fadeInUp 650ms ease-out;
-        }
-
-        .label {
-            margin: 0;
-            font-size: 0.85rem;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-        }
-
-        .value {
-            margin: 10px 0 0;
-            font-size: clamp(1.1rem, 1.8vw, 1.4rem);
+            font-size: clamp(1rem, 1.8vw, 1.3rem);
             font-weight: 700;
-            line-height: 1.4;
-            word-break: break-word;
+            opacity: 0.98;
         }
 
-        .token-value {
-            font-size: clamp(2rem, 5vw, 3.2rem);
-            letter-spacing: 1px;
-            line-height: 1.1;
-        }
-
-        .token-card {
-            text-align: center;
-        }
-
-        .token-meta {
-            margin: 10px 0 0;
-            color: var(--muted);
+        .hero .app {
+            margin: 4px 0 0;
             font-size: 0.95rem;
+            opacity: 0.92;
+        }
+
+        .status-strip {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .strip-card {
+            border-radius: 16px;
+            border: 1px solid var(--line);
+            background: var(--panel);
+            padding: 14px 16px;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
+        }
+
+        .strip-label {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+        }
+
+        .strip-value {
+            margin: 8px 0 0;
+            font-size: clamp(1.4rem, 3.6vw, 2.4rem);
+            font-weight: 800;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .strip-meta {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 0.86rem;
+        }
+
+        .exambro-active {
+            color: var(--ok);
+        }
+
+        .exambro-inactive {
+            color: var(--down);
         }
 
         .desc {
-            margin-top: 18px;
-            background: var(--card);
+            border-radius: 16px;
             border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 20px;
+            background: #f8fbff;
+            padding: 16px;
             color: var(--muted);
             line-height: 1.7;
-            animation: fadeInUp 800ms ease-out;
-        }
-
-        .qr-wrap {
-            margin-top: 18px;
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 20px;
-            text-align: center;
-            animation: fadeInUp 900ms ease-out;
-        }
-
-        .qr-image {
-            width: min(260px, 100%);
-            aspect-ratio: 1 / 1;
-            border-radius: 12px;
-            border: 1px solid var(--line);
-            background: #fff;
-            padding: 10px;
-        }
-
-        .qr-help {
-            margin: 12px 0 0;
-            color: var(--muted);
             font-size: 0.95rem;
         }
 
-        .refresh-bar {
-            margin-top: 18px;
-            background: var(--card);
+        .server-section {
+            border-radius: 18px;
             border: 1px solid var(--line);
-            border-radius: 14px;
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 0.85rem;
+            background: var(--panel);
+            padding: 18px;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        .server-title {
+            margin: 0;
+            font-size: 1.05rem;
+        }
+
+        .server-note {
+            margin: 6px 0 0;
             color: var(--muted);
+            font-size: 0.9rem;
         }
 
-        .refresh-bar .countdown {
-            font-weight: 600;
-            color: var(--accent);
+        .server-layout {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: 230px 1fr;
+            gap: 14px;
+            align-items: start;
         }
 
-        .refresh-bar .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #10b981;
-            margin-right: 6px;
-            animation: pulse-dot 2s infinite;
+        .single-qr {
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: #fff;
+            padding: 12px;
+            display: grid;
+            gap: 10px;
+            place-items: center;
         }
 
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+        .server-list {
+            display: grid;
+            gap: 10px;
         }
 
-        .fade-update {
-            animation: fadeFlash 600ms ease;
+        .server-item {
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #fff;
+            padding: 12px;
+            display: grid;
+            gap: 8px;
         }
 
-        @keyframes fadeFlash {
-            0% { opacity: 0.3; transform: scale(0.97); }
-            100% { opacity: 1; transform: scale(1); }
+        .server-item.up {
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .server-item.down {
+            background: #fff1f2;
+            border-color: #fecdd3;
+        }
+
+        .server-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .server-name {
+            margin: 0;
+            font-size: 0.98rem;
+            font-weight: 800;
+        }
+
+        .badge {
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .badge.up {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.down {
+            background: #ffe4e6;
+            color: #9f1239;
+        }
+
+        .server-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            line-height: 1.35;
+            min-height: 38px;
+        }
+
+        .server-stats span:last-child {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .server-qrcode {
+            width: 100%;
+            max-width: 200px;
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 7px;
+            background: #fff;
+            display: grid;
+            place-items: center;
+        }
+
+        .server-qrcode svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .server-qr-note {
+            margin: 0;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--muted);
+            background: #f8fafc;
+            border: 1px dashed var(--line);
+            border-radius: 10px;
+            padding: 12px;
+            display: grid;
+            place-items: center;
+            min-height: 200px;
         }
 
         .actions {
-            margin-top: 18px;
             display: flex;
-            gap: 12px;
             flex-wrap: wrap;
+            gap: 10px;
         }
 
         .btn {
             text-decoration: none;
-            display: inline-block;
-            padding: 11px 16px;
-            border-radius: 12px;
-            font-weight: 600;
+            border-radius: 10px;
             border: 1px solid var(--line);
-            transition: transform 180ms ease, box-shadow 180ms ease;
-        }
-
-        .btn-primary {
-            background: var(--ink);
-            color: #fff;
-            border-color: var(--ink);
-        }
-
-        .btn-secondary {
-            color: var(--ink);
-            background: #fff;
+            padding: 10px 14px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            transition: transform 140ms ease, box-shadow 140ms ease;
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .btn-primary {
+            background: var(--brand-deep);
+            border-color: var(--brand-deep);
+            color: #fff;
         }
 
-        @media (max-width: 760px) {
-            body {
-                padding: 14px;
-            }
+        .btn-soft {
+            background: #fff;
+            color: var(--ink);
+        }
 
-            .hero,
-            .card,
-            .desc {
-                border-radius: 14px;
-            }
+        .refresh-bar {
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #fff;
+            padding: 10px 12px;
+            font-size: 0.84rem;
+            color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
 
-            .grid {
-                grid-template-columns: 1fr;
-            }
+        .refresh-count {
+            color: var(--brand);
+            font-weight: 700;
+        }
+
+        @media (max-width: 860px) {
+            body { padding: 14px; }
+            .status-strip { grid-template-columns: 1fr; }
+            .server-layout { grid-template-columns: 1fr; }
+            .hero { border-radius: 16px; padding: 18px; }
+            .server-stats { font-size: 0.8rem; }
         }
     </style>
 </head>
 <body>
-    <div class="wrapper">
+    <div class="shell">
         <section class="hero">
-            <h1>Informasi Token dan URL CBT</h1>
-            <p>Pastikan token dan alamat CBT sesuai dengan pengumuman terbaru sekolah.</p>
+            <h1>Informasi Token dan Server CBT</h1>
+            <p class="school">{{ $info->school }}</p>
+            <p class="app">{{ $info->app_name }}</p>
         </section>
 
-        <section class="grid">
-            <article class="card" id="exambro-card" style="text-align: center; padding: 16px 20px; background: {{ $exambroActive ? '#ecfdf3' : '#fff1f2' }}; border-color: {{ $exambroActive ? '#a7f3d0' : '#fecdd3' }};">
-                <p class="label" id="exambro-label" style="color: {{ $exambroActive ? '#047857' : '#be123c' }};">Status Token Exambro</p>
-                <p class="value" id="exambro-value" style="font-size: clamp(1.4rem, 3vw, 2rem); color: {{ $exambroActive ? '#047857' : '#be123c' }};">
-                    <span id="exambro-dot" style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: {{ $exambroActive ? '#10b981' : '#f43f5e' }}; vertical-align: middle; margin-right: 8px; box-shadow: 0 0 8px {{ $exambroActive ? 'rgba(16,185,129,0.5)' : 'rgba(244,63,94,0.4)' }};"></span>
-                    <span id="exambro-text">{{ $exambroActive ? 'AKTIF' : 'NON-AKTIF' }}</span>
-                </p>
-                <p id="exambro-hint" style="margin: 8px 0 0; color: {{ $exambroActive ? '#047857' : '#be123c' }}; font-size: 0.92rem; opacity: 0.85;">
-                    {{ $exambroActive ? 'Token dan PIN Exambro dapat digunakan.' : 'Token dan PIN Exambro sedang tidak aktif.' }}
+        <section class="status-strip">
+            <article class="strip-card">
+                <p class="strip-label">Token CBT</p>
+                <p class="strip-value" id="token-cbt-value">{{ $info->cbt_token }}</p>
+                <p class="strip-meta" id="token-cbt-meta">
+                    @if (!empty($info->token_valid_until))
+                        Berlaku sampai {{ $info->token_valid_until }}
+                    @elseif (!empty($info->token_updated_at))
+                        Diperbarui {{ $info->token_updated_at }}
+                    @else
+                        Waktu pembaruan token belum tersedia
+                    @endif
                 </p>
             </article>
-
-            <article class="card token-card">
-                <p class="label">Token CBT</p>
-                <p class="value token-value" id="token-value">{{ $info->token }}</p>
-                <p class="token-meta" id="token-meta">
-                @if (!empty($info->token_valid_until))
-                    Berlaku sampai: {{ $info->token_valid_until }}
-                @elseif (!empty($info->token_updated_at))
-                    Terakhir diperbarui: {{ $info->token_updated_at }}
-                @else
-                    Waktu berlaku token belum tersedia.
-                @endif
+            <article class="strip-card">
+                <p class="strip-label">Status Exambro</p>
+                <p class="strip-value {{ $exambroActive ? 'exambro-active' : 'exambro-inactive' }}">
+                    {{ $exambroActive ? 'AKTIF' : 'NON-AKTIF' }}
                 </p>
+                <p class="strip-meta">PIN Exambro: <strong>{{ $info->exambro_token ?: '-' }}</strong></p>
             </article>
         </section>
 
-        <section class="desc" id="desc-section">
-            {{ $info->description ?: 'Tidak ada keterangan tambahan.' }}
+        <section class="desc">
+            {{ $info->description ?: 'Belum ada keterangan tambahan dari admin.' }}
         </section>
 
-        <section class="qr-wrap">
-            <p class="label">QR URL CBT</p>
-            @if (!empty($info->cbt_url))
-                <img
-                    class="qr-image"
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={{ rawurlencode($info->cbt_url) }}"
-                    alt="QR code akses CBT"
-                >
-                <p class="qr-help">Scan QR code ini untuk membuka halaman CBT.</p>
-            @else
-                <p class="value">URL CBT belum tersedia.</p>
-            @endif
+        <section class="server-section">
+            <h2 class="server-title">Daftar Server CBT</h2>
+            <p class="server-note">Semua QR mengarah ke halaman Exambro untuk akses cepat.</p>
+            @php
+                $singleQr = collect($servers)->pluck('qr_svg')->filter()->first();
+            @endphp
+            <div class="server-layout">
+                <div class="single-qr">
+                    @if (!empty($singleQr))
+                        <div class="server-qrcode" aria-label="QR Exambro">
+                            {!! $singleQr !!}
+                        </div>
+                    @else
+                        <p class="server-qr-note">QR belum tersedia.</p>
+                    @endif
+                </div>
+
+                <div class="server-list">
+                    @foreach ($servers as $server)
+                        <article class="server-item {{ $server['status_class'] }}">
+                        <div class="server-head">
+                            <h3 class="server-name">{{ $server['name'] }}</h3>
+                            <span class="badge {{ $server['status_class'] }}">{{ $server['status_label'] }}</span>
+                        </div>
+                        <div class="server-stats">
+                            <span>Core {{ $server['core'] }} • RAM {{ $server['ram'] }}</span>
+                            <span>{{ $server['active_user_count'] ?? $server['login_count'] }} / {{ $server['capacity'] }} peserta aktif (2m)</span>
+                        </div>
+                        </article>
+                    @endforeach
+                </div>
+            </div>
         </section>
 
         <section class="actions">
-            <a class="btn btn-secondary" href="{{ route('cbt.admin.login') }}">Login Admin</a>
+            <a class="btn btn-soft" href="{{ route('cbt.admin.login') }}">Login Admin</a>
         </section>
 
         <section class="refresh-bar">
-            <span><span class="status-dot"></span> Auto-refresh aktif</span>
-            <span>Update berikutnya: <span class="countdown" id="countdown">5:00</span></span>
+            <span>Auto-refresh aktif (30 detik)</span>
+            <span>Update berikutnya: <span id="countdown" class="refresh-count">00:30</span></span>
         </section>
     </div>
 
     <script>
         (function () {
-            var INTERVAL = 300; // detik (5 menit)
-            var remaining = INTERVAL;
-            var countdownEl = document.getElementById('countdown');
+            var total = 30;
+            var remaining = total;
+            var countdown = document.getElementById('countdown');
+            var tokenEl  = document.getElementById('token-cbt-value');
+            var metaEl   = document.getElementById('token-cbt-meta');
+            var lastToken = tokenEl ? tokenEl.textContent.trim() : '';
 
-            function pad(n) { return n < 10 ? '0' + n : n; }
-
-            function updateCountdown() {
-                var m = Math.floor(remaining / 60);
-                var s = remaining % 60;
-                countdownEl.textContent = m + ':' + pad(s);
-            }
-
-            function applyFade(el) {
-                el.classList.remove('fade-update');
-                void el.offsetWidth;
-                el.classList.add('fade-update');
-            }
-
-            function refreshToken() {
-                fetch('{{ route("cbt.token.info") }}', {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            function updateTokenFromApi() {
+                fetch('{{ route('cbt.token.info') }}?_=' + Date.now(), {
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/json' }
                 })
-                .then(function (r) { return r.json(); })
+                .then(function (res) { return res.json(); })
                 .then(function (data) {
-                    // Update token
-                    var tokenEl = document.getElementById('token-value');
-                    if (tokenEl.textContent.trim() !== data.token) {
-                        tokenEl.textContent = data.token;
-                        applyFade(tokenEl);
+                    var newToken = (data.cbt_token || data.token || '').toString().trim();
+                    if (newToken && newToken !== lastToken) {
+                        if (tokenEl) {
+                            tokenEl.textContent = newToken;
+                            tokenEl.style.transition = 'color 0.4s';
+                            tokenEl.style.color = '#059669';
+                            setTimeout(function () { tokenEl.style.color = ''; }, 2000);
+                        }
+                        if (metaEl && data.token_updated_at) {
+                            metaEl.textContent = 'Diperbarui ' + data.token_updated_at;
+                        }
+                        lastToken = newToken;
                     }
-
-                    // Update token meta
-                    var metaEl = document.getElementById('token-meta');
-                    var metaText = '';
-                    if (data.token_valid_until) {
-                        metaText = 'Berlaku sampai: ' + data.token_valid_until;
-                    } else if (data.token_updated_at) {
-                        metaText = 'Terakhir diperbarui: ' + data.token_updated_at;
-                    } else {
-                        metaText = 'Waktu berlaku token belum tersedia.';
-                    }
-                    metaEl.textContent = metaText;
-
-                    // Update exambro status
-                    var active = data.exambro_active;
-                    var card = document.getElementById('exambro-card');
-                    var label = document.getElementById('exambro-label');
-                    var value = document.getElementById('exambro-value');
-                    var dot = document.getElementById('exambro-dot');
-                    var text = document.getElementById('exambro-text');
-                    var hint = document.getElementById('exambro-hint');
-
-                    card.style.background = active ? '#ecfdf3' : '#fff1f2';
-                    card.style.borderColor = active ? '#a7f3d0' : '#fecdd3';
-                    label.style.color = active ? '#047857' : '#be123c';
-                    value.style.color = active ? '#047857' : '#be123c';
-                    dot.style.background = active ? '#10b981' : '#f43f5e';
-                    dot.style.boxShadow = '0 0 8px ' + (active ? 'rgba(16,185,129,0.5)' : 'rgba(244,63,94,0.4)');
-                    text.textContent = active ? 'AKTIF' : 'NON-AKTIF';
-                    hint.style.color = active ? '#047857' : '#be123c';
-                    hint.textContent = active ? 'Token dan PIN Exambro dapat digunakan.' : 'Token dan PIN Exambro sedang tidak aktif.';
-
-                    // Update description
-                    var descEl = document.getElementById('desc-section');
-                    descEl.textContent = data.description || 'Tidak ada keterangan tambahan.';
-
-                    applyFade(card);
+                    remaining = total;
                 })
                 .catch(function () {
-                    // Jika fetch gagal, fallback full reload
-                    window.location.reload();
+                    /* Gagal fetch — coba lagi di interval berikutnya */
                 });
-
-                remaining = INTERVAL;
             }
 
-            setInterval(function () {
-                remaining--;
-                if (remaining <= 0) {
-                    refreshToken();
+            function tick() {
+                var m = Math.floor(remaining / 60);
+                var s = remaining % 60;
+                countdown.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                remaining -= 1;
+                if (remaining < 0) {
+                    updateTokenFromApi();
                 }
-                updateCountdown();
-            }, 1000);
+            }
 
-            updateCountdown();
+            tick();
+            setInterval(tick, 1000);
         })();
     </script>
 </body>

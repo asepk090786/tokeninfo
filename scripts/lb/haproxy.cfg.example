@@ -1,0 +1,42 @@
+# HAProxy Load Balancer example for 4 Laravel backends
+# Place on LB server: /etc/haproxy/haproxy.cfg
+
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    daemon
+    maxconn 4000
+
+defaults
+    log global
+    mode http
+    option httplog
+    timeout connect 5s
+    timeout client  60s
+    timeout server  60s
+    retries 3
+
+frontend fe_token_http
+    bind *:80
+    default_backend be_token_apps
+
+backend be_token_apps
+    # Choose ONE balancing method:
+    balance leastconn
+    # balance roundrobin
+
+    option httpchk GET /api/config/health
+    http-check expect status 200
+
+    # Sticky session by cookie (optional)
+    # cookie SRV insert indirect nocache
+    # server app1 10.10.10.11:80 check cookie a1
+    # server app2 10.10.10.12:80 check cookie a2
+    # server app3 10.10.10.13:80 check cookie a3
+    # server app4 10.10.10.14:80 check cookie a4
+
+    # Non-sticky default
+    server app1 10.10.10.11:80 check
+    server app2 10.10.10.12:80 check
+    server app3 10.10.10.13:80 check
+    server app4 10.10.10.14:80 check

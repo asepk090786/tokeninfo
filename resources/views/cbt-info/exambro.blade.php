@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="{{ url('exambro-manifest.json') }}">
+    <link rel="icon" href="{{ url('pwa/exambro-icon.svg') }}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{{ url('pwa/exambro-icon.svg') }}">
+    <title>Exambro Client - Interactive Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #eef1f6;
+            --panel: #ffffff;
+            --text: #1f3253;
+            --muted: #60708c;
+            --line: #d7deea;
+            --good: #10a856;
+            --good-bg: #c8f0dc;
+            --bad: #d94747;
+            --bad-bg: #f8d3d3;
+            --accent-start: #2f6fdf;
+            --accent-end: #5f8fe9;
+            --transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: "Plus Jakarta Sans", sans-serif;
+            background: linear-gradient(165deg, #f4f6fb 0%, #e9edf4 100%);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 18px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        .app-shell {
+            width: min(1080px, 100%);
+            margin: 0 auto;
+            min-height: 100vh;
+            background: transparent;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hero {
+            color: var(--text);
+            padding: 0;
+            background: transparent;
+        }
+
+        .hero-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.5s ease;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .brand-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #3b82f6, #2f6fdf);
+            display: grid;
+            place-items: center;
+            flex-shrink: 0;
+        }
+
+        .brand-logo svg {
+            width: 28px;
+            height: 28px;
+            fill: #ffffff;
+        }
+
+        .brand-content {
+            min-width: 0;
+        }
+
+        .brand-title {
+            font-size: clamp(2rem, 3.1vw, 3rem);
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            line-height: 1;
+            color: #2f6fdf;
+        }
+
+        .brand-subtitle {
+            margin-top: 6px;
+            opacity: 1;
+            font-size: 0.92rem;
+            font-weight: 700;
+            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #51658a;
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .refresh-btn,
+        .install-btn,
+        .kiosk-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #ffffff;
+            color: #334865;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+        }
+
+        .action-ic {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #3b82f6, #2f6fdf);
+            border-color: #2f6fdf;
+            color: #fff;
+        }
+
+        .refresh-btn:hover,
+        .install-btn:hover,
+        .kiosk-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.96);
+        }
+
+        .refresh-btn.loading {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .refresh-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .refresh-btn.loading svg {
+            animation: spin 1s linear infinite;
+        }
+
+        .install-btn {
+            display: none;
+        }
+
+        .install-btn.visible {
+            display: inline-flex;
+        }
+
+        .settings-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: #60708c;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+        }
+
+        .settings-toggle:hover {
+            transform: translateY(-1px);
+        }
+
+        .settings-toggle svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .hero-panel {
+            position: relative;
+            overflow: hidden;
+            padding: 22px 26px;
+            border-radius: 20px;
+            border: 1px solid #ccd8ea;
+            background: linear-gradient(120deg, #eff4fb 0%, #d9e7fb 100%);
+            box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+        }
+
+        .hero-panel::before {
+            content: '';
+            position: absolute;
+            right: -120px;
+            top: -35px;
+            width: 520px;
+            height: 250px;
+            border-radius: 130px;
+            background: radial-gradient(circle at 30% 50%, rgba(120, 161, 231, 0.42) 0%, rgba(120, 161, 231, 0.16) 48%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            margin-top: 0;
+            animation: slideIn 0.5s ease 0.1s both;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-left {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hero-title {
+            font-size: clamp(2.1rem, 3vw, 2.9rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin: 0;
+            color: #1d2f4e;
+        }
+
+        .hero-subtitle {
+            font-size: 1.05rem;
+            margin-top: 10px;
+            opacity: 1;
+            color: #4f5f7e;
+            line-height: 1.45;
+            font-weight: 600;
+        }
+
+        .hero-right {
+            flex-shrink: 0;
+        }
+
+        .token-code {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-align: left;
+            min-width: 190px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #c8d7ec;
+            border-radius: 18px;
+            padding: 14px 18px;
+            box-shadow: 0 10px 20px rgba(47, 111, 223, 0.12);
+            transition: var(--transition);
+            animation: slideIn 0.5s ease 0.15s both;
+        }
+
+        .token-code:hover {
+            background: rgba(255, 255, 255, 0.28);
+        }
+
+        .token-code .label {
+            opacity: 1;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #6a7d9c;
+        }
+
+        .token-code .value {
+            font-size: clamp(2.2rem, 3.4vw, 3rem);
+            font-weight: 800;
+            color: #2f6fdf;
+            text-shadow: none;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        .token-code.hidden .value {
+            font-family: monospace;
+        }
+
+        .token-code.hidden-by-admin {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+
+        .hero-meta {
+            margin-top: 14px;
+            font-size: 1rem;
+            opacity: 1;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
+            color: #2f476f;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .indicator-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
+        }
+
+        .indicator-dot.active {
+            background: #22c55e;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .indicator-dot.inactive {
+            background: #fb7185;
+        }
+
+        .settings-panel {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+            z-index: 100;
+        }
+
+        .settings-panel.active {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .settings-panel-content {
+            padding: 10px;
+        }
+
+        .settings-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #f0f0f0;
+        }
+
+        .settings-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .toggle-checkbox {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 6px;
+        }
+
+        .toggle-checkbox input {
+            cursor: pointer;
+        }
+
+        .toggle-checkbox label {
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .interval-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .interval-input {
+            width: 50px;
+            padding: 4px 6px;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .interval-input:focus {
+            outline: none;
+            border-color: var(--accent-start);
+            box-shadow: 0 0 0 2px rgba(63, 125, 232, 0.1);
+        }
+
+        .content {
+            padding: 14px 0 12px;
+            display: grid;
+            gap: 10px;
+            flex: 1;
+            overflow-y: auto;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .alert {
+            border-radius: 10px;
+            border: 1px solid transparent;
+            padding: 10px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            animation: slideIn 0.3s ease;
+        }
+
+        .alert.error {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: #b91c1c;
+        }
+
+        .alert.info {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .alert.success {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .skeleton-card {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: linear-gradient(-90deg, #f0f4fa 25%, #e0e8f5 50%, #f0f4fa 75%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-height: 60px;
+        }
+
+        .server-card {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #eef2f7;
+            box-shadow: 0 2px 0 rgba(15, 23, 42, 0.02);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            text-align: left;
+            cursor: pointer;
+            transition: var(--transition);
+            animation: slideIn 0.3s ease;
+        }
+
+        .server-card:hover:not(.is-disabled) {
+            transform: translateY(-3px);
+            border-color: #9cb4da;
+            box-shadow: 0 10px 28px rgba(42, 58, 88, 0.12);
+        }
+
+        .server-card:active:not(.is-disabled) {
+            transform: translateY(-2px);
+        }
+
+        .server-card.is-disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .server-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .server-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            flex-shrink: 0;
+        }
+
+        .server-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .server-icon.primary {
+            background: #d8e8ff;
+            color: #3b82f6;
+        }
+
+        .server-icon.backup1 {
+            background: #ebe2ff;
+            color: #8b5cf6;
+        }
+
+        .server-icon.backup2 {
+            background: #d8f7f2;
+            color: #0ea5a5;
+        }
+
+        .server-icon.custom {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        .server-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .server-name {
+            font-size: 1rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .server-caption {
+            margin-top: 2px;
+            font-size: 0.8rem;
+            color: #55657f;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .server-side {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .monitor-box {
+            min-width: 250px;
+            text-align: left;
+            background: #f7fafc;
+            border: 1px solid #d9e2ef;
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+
+        .monitor-title {
+            margin: 0 0 8px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #48607f;
+        }
+
+        .monitor-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 6px;
+        }
+
+        .monitor-gauge {
+            margin-bottom: 10px;
+            padding: 10px 10px 8px;
+            border: 1px solid #d9e2ef;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        }
+
+        .gauge-shell {
+            position: relative;
+            width: 146px;
+            height: 78px;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+
+        .gauge-threshold {
+            position: absolute;
+            bottom: 18px;
+            font-size: 0.6rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: #64748b;
+            z-index: 2;
+        }
+
+        .gauge-threshold.warn {
+            left: 84px;
+            color: #a16207;
+        }
+
+        .gauge-threshold.danger {
+            right: 10px;
+            color: #b91c1c;
+        }
+
+        .gauge-arc {
+            position: absolute;
+            inset: 0;
+            border-radius: 146px 146px 0 0;
+            background: conic-gradient(
+                from 180deg,
+                #0fca34 0deg 72deg,
+                #16a34a 72deg 126deg,
+                #ffea00 126deg 162deg,
+                #f97316 162deg 171deg,
+                #f31212 171deg 180deg
+            );
+        }
+
+        .gauge-arc::after {
+            content: '';
+            position: absolute;
+            left: 22px;
+            right: 22px;
+            top: 22px;
+            bottom: -22px;
+            border-radius: 120px 120px 0 0;
+            background: #f7fafc;
+        }
+
+        .gauge-needle {
+            position: absolute;
+            left: 50%;
+            bottom: 4px;
+            width: 4px;
+            height: 60px;
+            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+            border-radius: 999px;
+            transform-origin: 50% calc(100% - 6px);
+            transform: translateX(-50%) rotate(-90deg);
+            box-shadow: 0 1px 6px rgba(15, 23, 42, 0.2);
+            transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .gauge-cap {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            background: #111827;
+            border: 4px solid #e2e8f0;
+            transform: translateX(-50%);
+        }
+
+        .gauge-readout {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .gauge-percent {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #1f2937;
+            font-variant-numeric: tabular-nums;
+            transition: color 240ms ease, transform 240ms ease;
+        }
+
+        .gauge-caption {
+            font-size: 0.72rem;
+            color: #64748b;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .monitor-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.83rem;
+            color: #334155;
+        }
+
+        .monitor-label {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .monitor-value {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            min-width: 78px;
+            background: #dff4e6;
+            color: #15803d;
+        }
+
+        .monitor-value.normal {
+            background: #dff4e6;
+            color: #15803d;
+        }
+
+        .monitor-value.medium {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .monitor-value.high {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .monitor-value.down {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 70px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            transition: var(--transition);
+        }
+
+        .status-pill.up {
+            background: var(--good-bg);
+            color: var(--good);
+        }
+
+        .status-pill.down {
+            background: var(--bad-bg);
+            color: var(--bad);
+        }
+
+        .status-meta {
+            margin-top: 6px;
+            color: #6d7b92;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .server-action {
+            margin-top: 10px;
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 9px;
+            padding: 9px 12px;
+            font-size: 0.82rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 6px 14px rgba(37, 99, 235, 0.2);
+        }
+
+        .server-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
+        }
+
+        .server-action.proxy {
+            background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%);
+            box-shadow: 0 6px 14px rgba(220, 38, 38, 0.24);
+        }
+
+        .server-action:active {
+            transform: translateY(0);
+        }
+
+        .server-action[disabled] {
+            background: #cbd5e1;
+            color: #64748b;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .footer {
+            text-align: center;
+            color: #7d8aa0;
+            font-size: 0.75rem;
+            padding: 10px 12px;
+            border-top: 1px solid #c8d0dd;
+        }
+
+        .footer a {
+            color: #55657f;
+            text-decoration: none;
+            border-bottom: 1px dashed #8ea1c0;
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .brand-title { font-size: 1.45rem; }
+            .brand-subtitle { font-size: 0.85rem; }
+            .hero-title { font-size: 1.9rem; }
+            .hero-subtitle { font-size: 1rem; }
+            .hero-panel { padding: 16px; }
+            .hero-top { margin-bottom: 8px; }
+            .token-code { min-width: 132px; padding: 10px 12px; }
+            .token-code .label { font-size: 0.72rem; }
+            .token-code .value { font-size: 1.7rem; }
+            .refresh-btn, .install-btn, .kiosk-btn { padding: 8px 12px; font-size: 0.72rem; }
+            .settings-toggle { width: 38px; height: 38px; }
+            .hero-meta { font-size: 0.86rem; gap: 8px; }
+        }
+
+        @media (max-width: 420px) {
+            .brand-title { font-size: 1rem; }
+            .server-card { padding: 10px; }
+            .server-name { font-size: 0.95rem; }
+            .server-icon { width: 36px; height: 36px; }
+            .monitor-box { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <main class="app-shell">
+        <header class="hero" id="hero">
+            <div class="hero-top">
+                <div class="brand">
+                    <div class="brand-logo" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4v2h2a1 1 0 1 1 0 2H8a1 1 0 0 1 0-2h2v-2H6a2 2 0 0 1-2-2V5zm2 0v10h12V5H6zm2 2h8a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2zm0 3h5a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2z"/>
+                        </svg>
+                    </div>
+                    <div class="brand-content">
+                        <p class="brand-title">{{ $appName ?? 'Exambro' }}</p>
+                        <p class="brand-subtitle" id="school-name">{{ $schoolName ?? 'Memuat...' }}</p>
+                    </div>
+                </div>
+                <div class="hero-actions">
+                    <button id="kiosk-btn" class="kiosk-btn" type="button" title="Aktifkan layar penuh">
+                        <span class="action-ic">🖥</span>
+                        <span>Mode Kiosk</span>
+                    </button>
+                    <button id="install-btn" class="install-btn" type="button" title="Install aplikasi Exambro">
+                        <span class="action-ic">⬇</span>
+                        <span>Install App</span>
+                    </button>
+                    <button id="refresh-btn" class="refresh-btn" title="Refresh data">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                            <path d="M3 21v-5h5"></path>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                    <div style="position: relative;">
+                        <button class="settings-toggle" id="settings-toggle" title="Settings">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l1.72-1.34c.15-.12.2-.34.1-.51l-1.63-2.82c-.1-.18-.32-.24-.51-.17l-2.03.8c-.42-.32-.9-.6-1.42-.8l-.3-2.16c-.04-.21-.21-.35-.42-.35h-3.26c-.21 0-.38.14-.42.35l-.3 2.16c-.52.2-1 .48-1.42.8l-2.03-.8c-.19-.07-.41 0-.51.17l-1.63 2.82c-.1.17-.05.39.1.51l1.72 1.34c-.05.3-.07.62-.07.94s.02.64.07.94l-1.72 1.34c-.15.12-.2.34-.1.51l1.63 2.82c.1.18.32.24.51.17l2.03-.8c.42.32.9.6 1.42.8l.3 2.16c.04.21.21.35.42.35h3.26c.21 0 .38-.14.42-.35l.3-2.16c.52-.2 1-.48 1.42-.8l2.03.8c.19.07.41 0 .51-.17l1.63-2.82c.1-.17.05-.39-.1-.51l-1.72-1.34zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                            </svg>
+                        </button>
+                        <div class="settings-panel" id="settings-panel">
+                            <div class="settings-panel-content">
+                                <div class="settings-item">
+                                    <label class="settings-label">Auto Refresh</label>
+                                    <div class="toggle-checkbox">
+                                        <input type="checkbox" id="auto-refresh-toggle" checked>
+                                        <label for="auto-refresh-toggle">Enabled</label>
+                                    </div>
+                                </div>
+                                <div class="settings-item">
+                                    <label class="settings-label">Refresh Interval</label>
+                                    <div class="interval-control">
+                                        <input type="number" id="interval-input" class="interval-input" value="15" min="5" max="120">
+                                        <span style="font-size: 0.8rem;">sec</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-panel">
+                <div class="hero-info">
+                    <div class="hero-left">
+                        <h2 class="hero-title">Pilih Server Ujian</h2>
+                        <p class="hero-subtitle">
+                            <span style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight:700; color:#10b981;">
+                                <span id="token-indicator-main" class="indicator-dot" style="display: inline-block;"></span>
+                                <strong id="token-status-main" style="font-size: 1.02rem;">-</strong>
+                            </span>
+                            Ketuk server yang tersedia untuk memulai koneksi
+                        </p>
+                    </div>
+                    <div class="hero-right">
+                        <div class="token-code" id="token-code">
+                            <span class="label">PIN EXIT</span>
+                            <span class="value" id="token-value">......</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hero-meta">
+                    <div class="status-indicator">
+                        <span style="font-weight: 700;">Token:</span>
+                        <span class="indicator-dot" id="token-indicator"></span>
+                        <span id="token-status" style="font-weight: 700;">-</span>
+                    </div>
+                    <span>•</span>
+                    <div id="cbt-token-note" style="font-weight: 700;">Token Soal: -</div>
+                    <span>•</span>
+                    <span id="checked-at" style="font-size: 0.92rem;">Dicek: -</span>
+                </div>
+
+                @if (!empty($canTogglePinVisibility) && $canTogglePinVisibility === true)
+                <div style="margin-top: 16px; padding: 16px; background: rgba(255,255,255,0.55); border-radius: 14px; border: 1px solid #d0dceb; position: relative; z-index:1;">
+                    <p style="margin: 0 0 12px 0; font-weight: 800; font-size: 1rem; text-transform: uppercase; color: #506180; letter-spacing:0.02em;">Admin Controls - 3 Setting Terpisah</p>
+                    
+                    <!-- 1. TOKEN EXAMBRO STATUS (FUNCTIONALITY) -->
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #ffffff; border-radius: 10px; border:1px solid #d8e2ef;">
+                        <span style="background: #2f6fdf; color:#fff; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.78rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                            🔐 TOKEN
+                        </span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color:#5d6f8f;">Fungsionalitas</span>
+                        <form action="{{ route('cbt.exambro.toggle') }}" method="post" style="margin: 0; flex: 1;">
+                            @csrf
+                            <button type="submit" id="token-toggle-btn" style="width: 100%; background: #fee2e2; color: #dc2626; border: 0; border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 300ms;">
+                                Memuat...
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- 2. PIN EXAMBRO STATUS (FUNCTIONALITY) -->
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #ffffff; border-radius: 10px; border:1px solid #d8e2ef;">
+                        <span style="background: #ef5b7d; color:#fff; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.78rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                            📌 PIN
+                        </span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color:#5d6f8f;">Status</span>
+                        <form action="{{ route('cbt.exambro.pin.toggle') }}" method="post" style="margin: 0; flex: 1;">
+                            @csrf
+                            <button type="submit" id="pin-toggle-btn" style="width: 100%; background: #dcfce7; color: #16a34a; border: 0; border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 300ms;">
+                                {{ !empty($exambroPinActive) && $exambroPinActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN' }}
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- 3. PIN VISIBILITY (DISPLAY ONLY) -->
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #ffffff; border-radius: 10px; border:1px solid #d8e2ef;">
+                        <span style="background: #10b981; color:#fff; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 0.78rem; min-width: 90px; text-align: center; white-space: nowrap;">
+                            👁️ TAMPIL
+                        </span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color:#5d6f8f;">Display</span>
+                        <form action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post" style="margin: 0; flex: 1;">
+                            @csrf
+                            <button type="submit" style="width: 100%; background: #dbeafe; color: #2f6fdf; border: 0; border-radius: 10px; padding: 10px 12px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 300ms;">
+                                {{ !empty($exambroTokenVisibleOnPage) && $exambroTokenVisibleOnPage ? '🙈 Sembunyikan' : '👁️ Tampilkan' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                @endif
+            </div>
+        </header>
+
+        <section class="content" id="server-list"></section>
+
+        <div class="footer">
+            <p id="footer-note">Tersambung dengan baik • Sistem aktif</p>
+        </div>
+    </main>
+
+    <template id="server-card-template">
+        <div class="server-card" role="button" tabindex="0">
+            <div class="server-main">
+                <div class="server-icon"></div>
+                <div class="server-info">
+                    <p class="server-name"></p>
+                    <p class="server-caption"></p>
+                </div>
+            </div>
+            <div class="server-side monitor-box">
+                <p class="monitor-title">Monitoring CBT</p>
+                <div class="monitor-gauge">
+                    <div class="gauge-shell">
+                        <div class="gauge-arc"></div>
+                        <span class="gauge-threshold warn">70%</span>
+                        <span class="gauge-threshold danger">90%</span>
+                        <div class="gauge-needle js-gauge-needle"></div>
+                        <div class="gauge-cap"></div>
+                    </div>
+                    <div class="gauge-readout">
+                        <span class="gauge-caption">Beban Server</span>
+                        <span class="gauge-percent js-gauge-percent">0%</span>
+                    </div>
+                </div>
+                <ul class="monitor-list">
+                    <li class="monitor-item">
+                        <span class="monitor-label">Status Server</span>
+                        <span class="monitor-value js-status-server">Online</span>
+                    </li>
+                    <li class="monitor-item">
+                        <span class="monitor-label">Lokasi Server</span>
+                        <span class="monitor-value normal js-lokasi-server">-</span>
+                    </li>
+                    <li class="monitor-item">
+                        <span class="monitor-label">Peserta Aktif (2m)</span>
+                        <span class="monitor-value normal js-peserta-login">0 / 40</span>
+                    </li>
+                    <li class="monitor-item">
+                        <span class="monitor-label">Indikator CBT</span>
+                        <span class="monitor-value normal js-indikator-cbt">Normal</span>
+                    </li>
+                </ul>
+                <p class="status-meta"></p>
+                <button type="button" class="server-action js-server-action">Pilih Server</button>
+            </div>
+        </div>
+    </template>
+
+    <template id="skeleton-template">
+        <div class="skeleton-card"></div>
+    </template>
+
+    <script>
+        // ============================================
+        // Configuration & State
+        // ============================================
+        const config = {
+            apiBase: '{{ url("api/exambro-info") }}',
+            heartbeatBase: '{{ url("api/server-presence/heartbeat") }}',
+            connectBase: '{{ url("exambro/connect") }}',
+            reverseProxyBase: '{{ route("cbt.lb") }}',
+            refreshInterval: 900000,
+            autoRefresh: true,
+            parseTokenStatus: parseTokenStatusValue,
+            parseWarningStatus: parseWarningStatusValue
+        };
+
+        let state = {
+            isLoading: false,
+            lastUpdate: null,
+            refreshInterval: null,
+            tokenStatus: false
+        };
+
+        // ============================================
+        // DOM Elements
+        // ============================================
+        const elements = {
+            kioskBtn: document.getElementById('kiosk-btn'),
+            installBtn: document.getElementById('install-btn'),
+            refreshBtn: document.getElementById('refresh-btn'),
+            settingsToggle: document.getElementById('settings-toggle'),
+            settingsPanel: document.getElementById('settings-panel'),
+            autoRefreshToggle: document.getElementById('auto-refresh-toggle'),
+            intervalInput: document.getElementById('interval-input'),
+            serverList: document.getElementById('server-list'),
+            schoolName: document.getElementById('school-name'),
+            tokenCode: document.getElementById('token-code'),
+            tokenValue: document.getElementById('token-value'),
+            tokenIndicator: document.getElementById('token-indicator'),
+            tokenStatus: document.getElementById('token-status'),
+            tokenIndicatorMain: document.getElementById('token-indicator-main'),
+            tokenStatusMain: document.getElementById('token-status-main'),
+            cbtTokenNote: document.getElementById('cbt-token-note'),
+            checkedAt: document.getElementById('checked-at'),
+            footerNote: document.getElementById('footer-note')
+        };
+
+        let deferredInstallPrompt = null;
+
+        // ============================================
+        // Utility Functions
+        // ============================================
+        function serverIconSvg() {
+            return '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm2 0v4h12V4H6zm-2 12a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4zm2 0v4h12v-4H6zm2-11h3a1 1 0 0 1 0 2H8a1 1 0 0 1 0-2zm0 12h3a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2z"/></svg>';
+        }
+
+        function parseTokenStatusValue(val) {
+            if (val === true || val === 1 || val === '1' || val === 'true' || val === 'active') return true;
+            return false;
+        }
+
+        function parseWarningStatusValue(val) {
+            return Number(val) === 1;
+        }
+
+        function locationFromCountryCode(code) {
+            if (code === 'ID') return 'Indonesia';
+            if (code === 'LAN') return 'Lokal';
+            if (code === 'IP') return 'IP Publik';
+            if (code === 'INT') return 'Internet';
+            if (!code || code === '--') return '-';
+            return code;
+        }
+
+        function indicatorLabelFromKey(key) {
+            if (key === 'high') return 'Tinggi';
+            if (key === 'medium') return 'Sedang';
+            return 'Normal';
+        }
+
+        function clampPercent(value) {
+            return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+        }
+
+        function calculateLoadPercent(loginCount, capacity) {
+            const safeCapacity = Math.max(1, Number(capacity || 1));
+            return clampPercent((Number(loginCount || 0) / safeCapacity) * 100);
+        }
+
+        function sendServerHeartbeat(serverKey) {
+            const cleanKey = (serverKey || '').trim();
+            if (!cleanKey) {
+                return;
+            }
+
+            const endpoint = config.heartbeatBase;
+            const payload = JSON.stringify({ server_key: cleanKey });
+
+            if (navigator.sendBeacon) {
+                try {
+                    const blob = new Blob([payload], { type: 'application/json' });
+                    navigator.sendBeacon(endpoint, blob);
+                    return;
+                } catch (e) {
+                    // Fallback to fetch keepalive below.
+                }
+            }
+
+            fetch(endpoint, {
+                method: 'POST',
+                keepalive: true,
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: payload
+            }).catch(() => {
+                // Ignore heartbeat errors to keep UX fast.
+            });
+        }
+
+        function connectToServer(serverKey, useReverseProxy) {
+            sendServerHeartbeat(serverKey);
+
+            if (useReverseProxy) {
+                window.location.href = config.reverseProxyBase;
+                return;
+            }
+
+            window.location.href = config.connectBase + '/' + encodeURIComponent(serverKey);
+        }
+
+        function createAlert(type, message) {
+            const box = document.createElement('div');
+            box.className = 'alert ' + type;
+            box.textContent = message;
+            return box;
+        }
+
+        function showSkeletonLoading() {
+            elements.serverList.innerHTML = '';
+            const template = document.getElementById('skeleton-template');
+            for (let i = 0; i < 3; i++) {
+                const skeleton = template.content.cloneNode(true);
+                elements.serverList.appendChild(skeleton);
+            }
+        }
+
+        function setLoading(loading) {
+            state.isLoading = loading;
+            elements.refreshBtn.classList.toggle('loading', loading);
+            elements.refreshBtn.disabled = loading;
+        }
+
+        // ============================================
+        // Event Listeners
+        // ============================================
+        elements.refreshBtn.addEventListener('click', () => {
+            if (!state.isLoading) load();
+        });
+
+        elements.settingsToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            elements.settingsPanel.classList.toggle('active');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.settings-toggle') && !e.target.closest('.settings-panel')) {
+                elements.settingsPanel.classList.remove('active');
+            }
+        });
+
+        elements.autoRefreshToggle.addEventListener('change', () => {
+            config.autoRefresh = elements.autoRefreshToggle.checked;
+            rescheduleRefresh();
+        });
+
+        elements.intervalInput.addEventListener('change', () => {
+            const val = parseInt(elements.intervalInput.value, 10);
+            if (val >= 30 && val <= 900) {
+                config.refreshInterval = val * 1000;
+                rescheduleRefresh();
+            } else {
+                elements.intervalInput.value = config.refreshInterval / 1000;
+            }
+        });
+
+        if (elements.installBtn) {
+            elements.installBtn.addEventListener('click', async () => {
+                if (!deferredInstallPrompt) {
+                    return;
+                }
+
+                deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                deferredInstallPrompt = null;
+                elements.installBtn.classList.remove('visible');
+            });
+        }
+
+        if (elements.kioskBtn) {
+            elements.kioskBtn.addEventListener('click', async () => {
+                const root = document.documentElement;
+                if (!document.fullscreenElement && root.requestFullscreen) {
+                    try {
+                        await root.requestFullscreen();
+                        elements.kioskBtn.textContent = 'Keluar Kiosk';
+                    } catch (e) {
+                        // Ignore fullscreen errors.
+                    }
+                    return;
+                }
+
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    await document.exitFullscreen();
+                    elements.kioskBtn.textContent = 'Mode Kiosk';
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!elements.kioskBtn) {
+                return;
+            }
+
+            elements.kioskBtn.textContent = document.fullscreenElement ? 'Keluar Kiosk' : 'Mode Kiosk';
+        });
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredInstallPrompt = event;
+            if (elements.installBtn) {
+                elements.installBtn.classList.add('visible');
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            if (elements.installBtn) {
+                elements.installBtn.classList.remove('visible');
+            }
+        });
+
+        // If running as installed app, hide kiosk/install helper buttons.
+        const inStandalone = window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
+        if (inStandalone) {
+            if (elements.installBtn) {
+                elements.installBtn.classList.remove('visible');
+            }
+            if (elements.kioskBtn) {
+                elements.kioskBtn.style.display = 'none';
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('{{ url('exambro-sw.js') }}').catch(() => {
+                    // Ignore SW register failures to avoid blocking exam page.
+                });
+            });
+        }
+
+        // ============================================
+        // Rendering Functions
+        // ============================================
+        function render(data) {
+            const tokenActive = config.parseTokenStatus(data.exambro_active || data.token_status);
+            const showWarning = config.parseWarningStatus(data.warning ?? data.peringatan ?? 1);
+            
+            state.tokenStatus = tokenActive;
+
+            // Update header
+            elements.schoolName.textContent = data.school || 'Sekolah Ujian';
+            
+            // Update token indicator
+            elements.tokenIndicator.className = 'indicator-dot ' + (tokenActive ? 'active' : 'inactive');
+            elements.tokenStatus.textContent = tokenActive ? 'AKTIF' : 'NON-AKTIF';
+            if (elements.tokenIndicatorMain) {
+                elements.tokenIndicatorMain.className = 'indicator-dot ' + (tokenActive ? 'active' : 'inactive');
+            }
+            if (elements.tokenStatusMain) {
+                elements.tokenStatusMain.textContent = tokenActive ? 'AKTIF' : 'NON-AKTIF';
+            }
+
+            // Update token toggle button
+            const tokenToggleBtn = document.getElementById('token-toggle-btn');
+            if (tokenToggleBtn) {
+                tokenToggleBtn.textContent = tokenActive ? '⊘ NON-AKTIFKAN' : '✓ AKTIFKAN';
+                tokenToggleBtn.style.background = tokenActive ? '#fee2e2' : '#dcfce7';
+                tokenToggleBtn.style.color = tokenActive ? '#dc2626' : '#16a34a';
+            }
+
+            // Update PIN/Token code
+            const showPin = data.show_exambro_token_on_page === true || data.show_exambro_token_on_page === 1 || data.show_exambro_token_on_page === '1';
+            if (showPin) {
+                elements.tokenValue.textContent = data.token || '-';
+                elements.tokenCode.classList.remove('hidden-by-admin');
+            } else {
+                elements.tokenValue.textContent = '••••••';
+                elements.tokenCode.classList.add('hidden-by-admin');
+            }
+
+            elements.cbtTokenNote.textContent = 'Token Soal: ' + (data.cbt_token || data.token_soal || '-');
+
+            // Clear server list
+            elements.serverList.innerHTML = '';
+
+            // Add alert if needed
+            if (showWarning) {
+                if (!tokenActive) {
+                    elements.serverList.appendChild(
+                        createAlert('error', '⚠️ Token Exambro non-aktif. Server Online tetap dapat dipilih.')
+                    );
+                } else {
+                    elements.serverList.appendChild(
+                        createAlert('info', '✓ Server yang Online dapat dipilih.')
+                    );
+                }
+            }
+
+            // Build server list
+            const servers = Array.isArray(data.servers) && data.servers.length > 0
+                ? data.servers.map(s => ({
+                    key: s.key,
+                    label: s.name,
+                    url: s.url,
+                    status: s.status,
+                    selectable: s.selectable === true,
+                    countryCode: s.country_code || '--',
+                    core: Number(s.core || 4),
+                    ram: s.ram || '8 GB',
+                    capacity: Number(s.capacity || 40),
+                    loginCount: Number((s.active_user_count ?? s.login_count) || 0),
+                    loginIndicator: s.login_indicator || 'low',
+                    loginIndicatorLabel: s.login_indicator_label || 'Rendah'
+                }))
+                : [
+                    { key: 'primary', label: 'Server Utama', url: data.server_utama, status: data.server_utama_status, selectable: data.server_utama_status === 'up' && !!data.server_utama, countryCode: '--', core: 4, ram: '8 GB', capacity: Number(data.server_utama_capacity || 40), loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
+                    { key: 'backup1', label: 'Server 2', url: data.server_backup1, status: data.server_backup1_status, selectable: data.server_backup1_status === 'up' && !!data.server_backup1, countryCode: '--', core: 4, ram: '8 GB', capacity: Number(data.server_backup1_capacity || 40), loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' },
+                    { key: 'backup2', label: 'Server 3', url: data.server_backup2, status: data.server_backup2_status, selectable: data.server_backup2_status === 'up' && !!data.server_backup2, countryCode: '--', core: 4, ram: '8 GB', capacity: Number(data.server_backup2_capacity || 40), loginCount: 0, loginIndicator: 'low', loginIndicatorLabel: 'Rendah' }
+                ];
+
+            servers.forEach((server, idx) => {
+                const template = document.getElementById('server-card-template');
+                const card = template.content.firstElementChild.cloneNode(true);
+
+                const icon = card.querySelector('.server-icon');
+                const iconClass = ['primary', 'backup1', 'backup2'].includes(server.key) ? server.key : 'custom';
+                icon.classList.add(iconClass);
+                icon.innerHTML = serverIconSvg();
+
+                card.querySelector('.server-name').textContent = server.label;
+                card.querySelector('.server-caption').textContent = 'Kode Negara: ' + server.countryCode;
+
+                const isOnline = server.status === 'up';
+                const statusMeta = card.querySelector('.status-meta');
+                const statusServerEl = card.querySelector('.js-status-server');
+                const lokasiServerEl = card.querySelector('.js-lokasi-server');
+                const pesertaLoginEl = card.querySelector('.js-peserta-login');
+                const indikatorEl = card.querySelector('.js-indikator-cbt');
+                const gaugeNeedleEl = card.querySelector('.js-gauge-needle');
+                const gaugePercentEl = card.querySelector('.js-gauge-percent');
+                const serverActionEl = card.querySelector('.js-server-action');
+
+                const capacity = Math.max(1, Number(server.capacity || 40));
+                const loadPercent = calculateLoadPercent(server.loginCount, capacity);
+                const pesertaText = server.loginCount + ' / ' + capacity + ' (' + loadPercent + '%)';
+                const indikatorKey = server.loginIndicator || 'low';
+                const indikatorLabel = indicatorLabelFromKey(indikatorKey);
+                const loadClass = indikatorKey === 'high' ? 'high' : (indikatorKey === 'medium' ? 'medium' : 'normal');
+                const useReverseProxy = loadPercent >= 90;
+
+                statusServerEl.textContent = isOnline ? 'Online' : 'Down';
+                statusServerEl.className = 'monitor-value js-status-server ' + (isOnline ? 'normal' : 'down');
+
+                lokasiServerEl.textContent = locationFromCountryCode(server.countryCode);
+                pesertaLoginEl.textContent = pesertaText;
+                pesertaLoginEl.className = 'monitor-value js-peserta-login ' + loadClass;
+
+                indikatorEl.textContent = indikatorLabel;
+                indikatorEl.className = 'monitor-value js-indikator-cbt ' + loadClass;
+
+                if (gaugeNeedleEl) {
+                    gaugeNeedleEl.style.transform = 'translateX(-50%) rotate(' + (-90 + (loadPercent * 1.8)) + 'deg)';
+                }
+
+                if (gaugePercentEl) {
+                    gaugePercentEl.textContent = loadPercent + '%';
+                    gaugePercentEl.className = 'gauge-percent js-gauge-percent';
+                    gaugePercentEl.style.transform = 'scale(1.04)';
+                    window.requestAnimationFrame(() => {
+                        gaugePercentEl.style.transform = 'scale(1)';
+                    });
+                    if (loadClass === 'high') {
+                        gaugePercentEl.style.color = '#dc2626';
+                    } else if (loadClass === 'medium') {
+                        gaugePercentEl.style.color = '#ca8a04';
+                    } else {
+                        gaugePercentEl.style.color = '#15803d';
+                    }
+                }
+
+                statusMeta.textContent = isOnline
+                    ? (useReverseProxy
+                        ? ('Beban ' + loadPercent + '%: koneksi akan dialihkan via reverse proxy')
+                        : ('Beban ' + loadPercent + '% dari kapasitas maksimum'))
+                    : 'Server tidak tersedia';
+                statusMeta.style.color = isOnline ? '#475569' : '#dc2626';
+
+                const selectable = isOnline && !!server.url && server.selectable !== false;
+                if (!selectable) {
+                    card.classList.add('is-disabled');
+                    card.setAttribute('aria-disabled', 'true');
+                    card.tabIndex = -1;
+                    if (serverActionEl) {
+                        serverActionEl.disabled = true;
+                        serverActionEl.textContent = isOnline ? 'Server Tidak Tersedia' : 'Server Offline';
+                    }
+                } else {
+                    if (serverActionEl) {
+                        serverActionEl.textContent = useReverseProxy ? ('Masuk via Proxy - ' + server.label) : ('Masuk - ' + server.label);
+                        serverActionEl.classList.toggle('proxy', useReverseProxy);
+                        serverActionEl.addEventListener('click', (event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            connectToServer(server.key, useReverseProxy);
+                        });
+                    }
+
+                    card.addEventListener('click', () => {
+                        connectToServer(server.key, useReverseProxy);
+                    });
+
+                    card.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            connectToServer(server.key, useReverseProxy);
+                        }
+                    });
+                }
+
+                elements.serverList.appendChild(card);
+            });
+
+            // Update timestamp
+            const now = new Date(data.checked_at);
+            elements.checkedAt.textContent = 'Dicek: ' + now.toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+            state.lastUpdate = now;
+        }
+
+        // ============================================
+        // API & Loading
+        // ============================================
+        function load() {
+            setLoading(true);
+            showSkeletonLoading();
+
+            const url = config.apiBase + (config.apiBase.indexOf('?') !== -1 ? '&' : '?') + '_t=' + Date.now();
+
+            let safeUrl;
+            try {
+                safeUrl = new URL(url, window.location.origin);
+            } catch (e) {
+                elements.serverList.innerHTML = '';
+                elements.serverList.appendChild(createAlert('error', '❌ URL API tidak valid.'));
+                elements.footerNote.textContent = '✗ Gagal terhubung • Coba muat ulang';
+                setLoading(false);
+                return;
+            }
+
+            if (safeUrl.origin !== window.location.origin) {
+                elements.serverList.innerHTML = '';
+                elements.serverList.appendChild(createAlert('error', '❌ Request lintas domain diblokir untuk keamanan.'));
+                elements.footerNote.textContent = '✗ Gagal terhubung • Cek konfigurasi API';
+                setLoading(false);
+                return;
+            }
+
+            fetch(safeUrl.toString(), {
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Akses ditolak atau API tidak dapat diakses.');
+                    return response.json();
+                })
+                .then(payload => {
+                    if (payload.status === 'error') throw new Error(payload.message || 'Gagal memuat data.');
+                    render(payload);
+                    elements.footerNote.textContent = '✓ Tersambung dengan baik • Sistem aktif';
+                })
+                .catch(error => {
+                    elements.serverList.innerHTML = '';
+                    elements.serverList.appendChild(createAlert('error', '❌ ' + (error.message || 'Gagal memuat data.')));
+                    elements.footerNote.textContent = '✗ Gagal terhubung • Coba muat ulang';
+                })
+                .finally(() => setLoading(false));
+        }
+
+        function rescheduleRefresh() {
+            if (state.refreshInterval) clearInterval(state.refreshInterval);
+            if (config.autoRefresh) {
+                state.refreshInterval = setInterval(load, config.refreshInterval);
+            }
+        }
+
+        // ============================================
+        // Initialize
+        // ============================================
+        load();
+        rescheduleRefresh();
+    </script>
+</body>
+</html>
