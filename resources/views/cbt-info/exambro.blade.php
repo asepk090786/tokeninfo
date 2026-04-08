@@ -1234,13 +1234,7 @@
 
         function connectToServer(serverKey, useReverseProxy) {
             sendServerHeartbeat(serverKey);
-
-            if (useReverseProxy) {
-                window.location.href = config.reverseProxyBase;
-                return;
-            }
-
-            window.location.href = config.connectBase + '/' + encodeURIComponent(serverKey);
+            window.location.href = config.reverseProxyBase;
         }
 
         function createAlert(type, message) {

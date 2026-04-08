@@ -389,7 +389,7 @@
 
         .svr-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 14px;
         }
 
@@ -485,9 +485,9 @@
         .svr-btn {
             width: 100%;
             border: 0;
-            border-radius: 0;
-            padding: 11px;
-            font-size: 0.92rem;
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 0.86rem;
             font-weight: 700;
             cursor: pointer;
             color: #fff;
@@ -640,6 +640,31 @@
             border-radius: 999px;
             box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
         }
+
+        .svr-action-wrap {
+            padding: 10px;
+            background: #0f172a;
+            border-top: 1px solid rgba(148, 163, 184, 0.16);
+        }
+
+        .svr-timer-form {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+        }
+
+        .bulk-selection-card {
+            margin-top: 12px;
+            border: 1px solid #d1fae5;
+            background: #ecfdf5;
+        }
+
+        .bulk-selection-actions {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -656,10 +681,6 @@
                     Pengaturan Token dan PIN
                     <small>Token CBT, PIN Exambro, status, dan peringatan</small>
                 </button>
-                <button class="menu-btn" data-target="panel-api" type="button">
-                    Pengaturan API
-                    <small>API key, endpoint Exambro, dan file konfigurasi</small>
-                </button>
                 <button class="menu-btn" data-target="panel-web" type="button">
                     Pengaturan WEB
                     <small>Server utama/backup yang tampil di halaman home</small>
@@ -672,6 +693,12 @@
 
             <div class="sidebar-actions">
                 <a class="link-btn btn-soft" href="{{ route('cbt.index') }}">Lihat Halaman Home</a>
+                <a class="link-btn btn-soft" href="{{ route('cbt.exambro.page') }}" target="_blank" rel="noopener noreferrer">Buka Halaman Exambro</a>
+                @if ($loadBalancerLinkAvailable)
+                    <a class="link-btn btn-soft" href="{{ route('cbt.lb') }}" target="_blank" rel="noopener noreferrer">Buka Link Load Balancing</a>
+                @else
+                    <span class="link-btn btn-soft" style="opacity:0.6; cursor:not-allowed;">Link Load Balancing aktif jika mirror valid lebih dari 1</span>
+                @endif
                 <button
                     id="btn-flush-cache"
                     type="button"
@@ -691,7 +718,7 @@
         <main class="content">
             <section class="banner">
                 <h2>Pengaturan Informasi CBT</h2>
-                <p>Kelola token, PIN, API, dan data server website dari satu panel admin.</p>
+                <p>Kelola token, PIN, dan data server website dari satu panel admin.</p>
 
                 @if (session('status'))
                     <div class="notice notice-ok">{{ session('status') }}</div>
@@ -850,47 +877,48 @@
                 </article>
             </section>
 
-            <section id="panel-api" class="panel">
-                <h3>Pengaturan API</h3>
-                <p class="panel-desc">Kelola endpoint Exambro tanpa API key dan unduhan paket aplikasi.</p>
-
-                <article class="card" style="margin-top: 12px;">
-                    <h4>Endpoint Exambro Siap Pakai</h4>
-                    <div class="field">
-                        <label for="exambro-page-url">Halaman Exambro</label>
-                        <input id="exambro-page-url" type="text" value="{{ $exambroPageUrl }}" readonly>
-                    </div>
-                    <div class="field">
-                        <label for="exambro-api-url">Endpoint API Exambro</label>
-                        <input id="exambro-api-url" type="text" value="{{ $exambroApiUrl }}" readonly>
-                    </div>
-                    <div class="btn-row">
-                        <a class="link-btn btn-soft" href="{{ $exambroPageUrl }}" target="_blank" rel="noopener noreferrer">Buka Halaman Exambro</a>
-                        <a class="link-btn btn-soft" href="{{ route('cbt.neo-exam.zip.download') }}">Download Neo_Exam.zip</a>
-                        <button class="copy-btn" id="copy-exambro-page" type="button">Salin Link Halaman</button>
-                        <button class="copy-btn" id="copy-exambro-api" type="button">Salin Link API</button>
-                    </div>
-                    @error('zip')
-                        <small style="color:#fca5a5; display:block; margin-top:8px;">{{ $message }}</small>
-                    @enderror
-                </article>
-            </section>
-
             <section id="panel-web" class="panel">
                 <h3>Pengaturan WEB</h3>
-                <p class="panel-desc">Tambah server baru, edit server yang ada, dan hapus server jika tidak dipakai lagi.</p>
+                <p class="panel-desc">Kelola jumlah mirror web, alamat mirror, dan status mirror yang dipakai untuk load balancing dari `mirror_list.json`.</p>
 
                 <article class="card" style="margin-top: 12px;">
-                    <h4>Tambah Server Baru</h4>
+                    <h4>Mirror List Load Balancing</h4>
+                    <p>File <strong>mirror_list.json</strong> otomatis dibuat dari data di panel ini. Setiap tambah, edit, hapus, hide, atau toggle LB pada mirror akan langsung menyinkronkan daftar mirror load balancing.</p>
+                    <div class="grid" style="margin-top: 12px;">
+                        <div class="field">
+                            <label>URL mirror_list.json</label>
+                            <input type="text" value="{{ $mirrorListUrl }}" readonly>
+                        </div>
+                        <div class="field">
+                            <label>Jumlah Mirror Valid</label>
+                            <input type="text" value="{{ $loadBalancerMirrorCount }} mirror" readonly>
+                        </div>
+                        <div class="field">
+                            <label>Status Link Load Balancing</label>
+                            <input type="text" value="{{ $loadBalancerLinkAvailable ? 'AKTIF' : 'MENUNGGU MINIMAL 2 MIRROR' }}" readonly>
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <a class="link-btn btn-soft" href="{{ $mirrorListUrl }}" target="_blank" rel="noopener noreferrer">Buka mirror_list.json</a>
+                        @if ($loadBalancerLinkAvailable)
+                            <a class="link-btn btn-soft" href="{{ route('cbt.lb') }}" target="_blank" rel="noopener noreferrer">Tes Link Load Balancing</a>
+                        @else
+                            <span class="link-btn btn-soft" style="opacity:0.6; cursor:not-allowed;">Tambah minimal 2 mirror valid agar link LB aktif</span>
+                        @endif
+                    </div>
+                </article>
+
+                <article class="card" style="margin-top: 12px;">
+                    <h4>Tambah Mirror Baru</h4>
                     <form action="{{ route('cbt.server.add') }}" method="post">
                         @csrf
                         <div class="grid" style="margin-top: 8px;">
                             <div class="field">
-                                <label for="new-server-name">Nama Server</label>
-                                <input id="new-server-name" name="server_name" type="text" maxlength="60" placeholder="Contoh: Server Lab 4">
+                                <label for="new-server-name">Nama Mirror</label>
+                                <input id="new-server-name" name="server_name" type="text" maxlength="60" placeholder="Contoh: Mirror Lab 4">
                             </div>
                             <div class="field">
-                                <label for="new-server-url">URL Server</label>
+                                <label for="new-server-url">URL Mirror</label>
                                 <input id="new-server-url" name="server_url" type="url" maxlength="255" required placeholder="https://cbt4.sekolah.sch.id">
                             </div>
                             <div class="field">
@@ -907,7 +935,24 @@
                             </div>
                         </div>
                         <div class="btn-row">
-                            <button class="btn-primary" type="submit">Tambah Server</button>
+                            <button class="btn-primary" type="submit">Tambah Mirror</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="card bulk-selection-card">
+                    <h4>Kontrol Massal Pilihan Exambro</h4>
+                    <p>Atur disable/enable tombol pemilihan server Exambro untuk semua mirror sekaligus.</p>
+                    <form action="{{ route('cbt.server.selection.all.timer') }}" method="post">
+                        @csrf
+                        <div class="field">
+                            <label for="bulk-disable-minutes">Disable Semua Selama (menit)</label>
+                            <input id="bulk-disable-minutes" name="disable_minutes" type="number" min="1" max="1440" placeholder="Contoh: 30">
+                        </div>
+                        <div class="bulk-selection-actions">
+                            <button class="btn-soft" type="submit" name="action" value="set_timer" style="background:#f59e0b;color:#fff;border:0;">Set Timer Semua</button>
+                            <button class="btn-soft" type="submit" name="action" value="disable_all" style="background:#dc2626;color:#fff;border:0;">Disable Semua</button>
+                            <button class="btn-soft" type="submit" name="action" value="enable_all" style="background:#16a34a;color:#fff;border:0;">Enable Semua</button>
                         </div>
                     </form>
                 </article>
@@ -918,6 +963,10 @@
                             @php
                                 $isUp = $server['status_class'] === 'up';
                                 $isHidden = (($server['hidden'] ?? false) === true);
+                                $selectionEnabled = (($server['selection_enabled'] ?? true) === true);
+                                $selectionRuntimeEnabled = (($server['selection_runtime_enabled'] ?? true) === true);
+                                $selectionTimedDisabled = (($server['selection_timed_disabled'] ?? false) === true);
+                                $selectionDisabledUntil = $server['selection_disabled_until'] ?? null;
                                 $dotClass = $isUp ? ($idx === 0 ? 'dot-green' : 'dot-orange') : 'dot-gray';
                                 $btnClass = $isUp ? ($idx === 0 ? 'svr-btn-green' : 'svr-btn-orange') : 'svr-btn-dark';
                             @endphp
@@ -926,20 +975,29 @@
                                 <div class="svr-head">
                                     <div class="svr-head-left">
                                         <span class="svr-icon">🖥</span>
-                                        <span class="svr-num">Server {{ $idx + 1 }}</span>
+                                        <span class="svr-num">Mirror {{ $idx + 1 }}</span>
                                     </div>
                                     <span class="svr-dot {{ $dotClass }}"></span>
                                 </div>
                                 <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-top: 1px solid rgba(148, 163, 184, 0.16); border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
                                     Status Tampil: <strong style="color: {{ $isHidden ? '#f59e0b' : '#22c55e' }};">{{ $isHidden ? 'HIDDEN' : 'VISIBLE' }}</strong>
                                 </div>
+                                <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
+                                    Status LB: <strong style="color: {{ (($server['lb_enabled'] ?? false) === true) ? '#22c55e' : '#f59e0b' }};">{{ (($server['lb_enabled'] ?? false) === true) ? 'AKTIF' : 'NONAKTIF' }}</strong>
+                                </div>
+                                <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
+                                    Pilih di Exambro: <strong style="color: {{ $selectionRuntimeEnabled ? '#22c55e' : '#f59e0b' }};">{{ $selectionRuntimeEnabled ? 'AKTIF' : 'NONAKTIF' }}</strong>
+                                    @if ($selectionTimedDisabled && !empty($selectionDisabledUntil))
+                                        <div style="margin-top:4px; color:#f59e0b;">Timer sampai: {{ $selectionDisabledUntil }}</div>
+                                    @endif
+                                </div>
                                 <div class="svr-body">
                                     <div class="svr-field">
-                                        <label class="svr-label">Nama Server</label>
+                                        <label class="svr-label">Nama Mirror</label>
                                         <input class="svr-input" name="server_name" type="text" maxlength="60" value="{{ $server['name'] }}" required>
                                     </div>
                                     <div class="svr-field">
-                                        <label class="svr-label">URL Server</label>
+                                        <label class="svr-label">URL Mirror</label>
                                         <input class="svr-input" name="server_url" type="url" maxlength="255" value="{{ $server['url'] }}" required>
                                     </div>
                                     <details class="svr-advanced">
@@ -958,18 +1016,42 @@
                                         </div>
                                     </details>
                                 </div>
-                                <button type="submit" class="svr-btn {{ $btnClass }}">Simpan Perubahan</button>
-                                <div style="padding: 10px; background: #0f172a; border-top: 1px solid rgba(148, 163, 184, 0.16);">
-                                    <button type="submit" class="svr-btn" style="background: {{ $isHidden ? '#16a34a' : '#f59e0b' }}; border-radius: 8px;" form="visibility-server-{{ $server['key'] }}">{{ $isHidden ? 'Unhide Server' : 'Hide Server' }}</button>
+                                <div class="svr-action-wrap">
+                                    <button type="submit" class="svr-btn {{ $btnClass }}">Simpan Perubahan</button>
+                                </div>
+                                <div class="svr-action-wrap">
+                                    <button type="submit" class="svr-btn" style="background: {{ $isHidden ? '#16a34a' : '#f59e0b' }}; border-radius: 8px;" form="visibility-server-{{ $server['key'] }}">{{ $isHidden ? 'Tampilkan Mirror' : 'Sembunyikan Mirror' }}</button>
+                                </div>
+                                <div class="svr-action-wrap">
+                                    <button type="submit" class="svr-btn" style="background: {{ (($server['lb_enabled'] ?? false) === true) ? '#dc2626' : '#16a34a' }}; border-radius: 8px;" form="lb-server-{{ $server['key'] }}">{{ (($server['lb_enabled'] ?? false) === true) ? 'Nonaktifkan LB' : 'Aktifkan LB' }}</button>
+                                </div>
+                                <div class="svr-action-wrap">
+                                    <button type="submit" class="svr-btn" style="background: {{ $selectionEnabled ? '#dc2626' : '#16a34a' }}; border-radius: 8px;" form="selection-toggle-server-{{ $server['key'] }}">{{ $selectionEnabled ? 'Nonaktifkan Pilihan Exambro' : 'Aktifkan Pilihan Exambro' }}</button>
+                                </div>
+                                <div class="svr-action-wrap">
+                                    <form action="{{ route('cbt.server.selection.timer', $server['key']) }}" method="post" class="svr-timer-form">
+                                        @csrf
+                                        <input name="disable_minutes" type="number" min="1" max="1440" class="svr-input" placeholder="Disable menit (contoh 30)">
+                                        <button type="submit" class="svr-btn" style="background:#f59e0b; border-radius: 8px;">Set Timer</button>
+                                        <button type="submit" name="clear_timer" value="1" class="svr-btn" style="background:#16a34a; border-radius: 8px;">Reset Timer</button>
+                                    </form>
                                 </div>
                                 @if (count($servers) > 1)
-                                    <div style="padding: 10px; background: #0f172a;">
-                                        <button type="submit" class="svr-btn" style="background: #dc2626; border-radius: 8px;" form="delete-server-{{ $server['key'] }}">Hapus Server</button>
+                                    <div class="svr-action-wrap">
+                                        <button type="submit" class="svr-btn" style="background: #dc2626; border-radius: 8px;" form="delete-server-{{ $server['key'] }}">Hapus Mirror</button>
                                     </div>
                                 @endif
                             </form>
 
                             <form id="visibility-server-{{ $server['key'] }}" action="{{ route('cbt.server.visibility.toggle', $server['key']) }}" method="post" style="display:none;">
+                                @csrf
+                            </form>
+
+                            <form id="lb-server-{{ $server['key'] }}" action="{{ route('cbt.server.lb.toggle', $server['key']) }}" method="post" style="display:none;">
+                                @csrf
+                            </form>
+
+                            <form id="selection-toggle-server-{{ $server['key'] }}" action="{{ route('cbt.server.selection.toggle', $server['key']) }}" method="post" style="display:none;">
                                 @csrf
                             </form>
 
@@ -1154,28 +1236,12 @@
             }
 
             var exambroTokenInput = document.getElementById('exambro-token');
-            var pageInput = document.getElementById('exambro-page-url');
-            var apiInput = document.getElementById('exambro-api-url');
 
             var copyTokenBtn = document.getElementById('copy-exambro-token');
-            var copyPageBtn = document.getElementById('copy-exambro-page');
-            var copyApiBtn = document.getElementById('copy-exambro-api');
 
             if (copyTokenBtn) {
                 copyTokenBtn.addEventListener('click', function () {
                     copyValue(exambroTokenInput, copyTokenBtn, 'PIN Exambro kosong.');
-                });
-            }
-
-            if (copyPageBtn) {
-                copyPageBtn.addEventListener('click', function () {
-                    copyValue(pageInput, copyPageBtn, 'Link halaman Exambro kosong.');
-                });
-            }
-
-            if (copyApiBtn) {
-                copyApiBtn.addEventListener('click', function () {
-                    copyValue(apiInput, copyApiBtn, 'Link API Exambro kosong.');
                 });
             }
         })();

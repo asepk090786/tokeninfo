@@ -247,6 +247,15 @@
         .server-qrcode svg {
             width: 100%;
             height: 100%;
+            display: block;
+        }
+
+        .server-qrcode canvas,
+        .server-qrcode img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
         }
 
         .server-qr-note {
@@ -360,6 +369,7 @@
             <h2 class="server-title">Daftar Server CBT</h2>
             <p class="server-note">Semua QR mengarah ke halaman Exambro untuk akses cepat.</p>
             @php
+                $exambroPageUrl = route('cbt.exambro.page');
                 $singleQr = collect($servers)->pluck('qr_svg')->filter()->first();
             @endphp
             <div class="server-layout">
@@ -369,21 +379,25 @@
                             {!! $singleQr !!}
                         </div>
                     @else
-                        <p class="server-qr-note">QR belum tersedia.</p>
+                        <div id="exambro-qr-js" class="server-qrcode" aria-label="QR Exambro"></div>
+                        <p id="exambro-qr-fallback" class="server-qr-note" style="display:none;">
+                            QR belum tersedia.<br>
+                            <a href="{{ $exambroPageUrl }}" target="_blank" rel="noopener noreferrer">Buka Halaman Exambro</a>
+                        </p>
                     @endif
                 </div>
 
                 <div class="server-list">
                     @foreach ($servers as $server)
-                        <article class="server-item {{ $server['status_class'] }}">
-                        <div class="server-head">
-                            <h3 class="server-name">{{ $server['name'] }}</h3>
-                            <span class="badge {{ $server['status_class'] }}">{{ $server['status_label'] }}</span>
-                        </div>
-                        <div class="server-stats">
-                            <span>Core {{ $server['core'] }} • RAM {{ $server['ram'] }}</span>
-                            <span>{{ $server['active_user_count'] ?? $server['login_count'] }} / {{ $server['capacity'] }} peserta aktif (2m)</span>
-                        </div>
+                        <article class="server-item {{ $server['status_class'] }}" data-server-key="{{ $server['key'] }}">
+                            <div class="server-head">
+                                <h3 class="server-name">{{ $server['name'] }}</h3>
+                                <span class="badge {{ $server['status_class'] }}" data-role="server-status">{{ $server['status_label'] }}</span>
+                            </div>
+                            <div class="server-stats">
+                                <span data-role="server-spec">Core {{ $server['core'] }} • RAM {{ $server['ram'] }}</span>
+                                <span data-role="server-load">{{ $server['active_user_count'] ?? $server['login_count'] }} / {{ $server['capacity'] }} peserta aktif (2m)</span>
+                            </div>
                         </article>
                     @endforeach
                 </div>
@@ -394,60 +408,35 @@
             <a class="btn btn-soft" href="{{ route('cbt.admin.login') }}">Login Admin</a>
         </section>
 
-        <section class="refresh-bar">
-            <span>Auto-refresh aktif (30 detik)</span>
-            <span>Update berikutnya: <span id="countdown" class="refresh-count">00:30</span></span>
-        </section>
     </div>
 
+    <script src="{{ asset('js/qrcode.min.js') }}"></script>
     <script>
         (function () {
-            var total = 30;
-            var remaining = total;
-            var countdown = document.getElementById('countdown');
-            var tokenEl  = document.getElementById('token-cbt-value');
-            var metaEl   = document.getElementById('token-cbt-meta');
-            var lastToken = tokenEl ? tokenEl.textContent.trim() : '';
-
-            function updateTokenFromApi() {
-                fetch('{{ route('cbt.token.info') }}?_=' + Date.now(), {
-                    cache: 'no-store',
-                    headers: { 'Accept': 'application/json' }
-                })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    var newToken = (data.cbt_token || data.token || '').toString().trim();
-                    if (newToken && newToken !== lastToken) {
-                        if (tokenEl) {
-                            tokenEl.textContent = newToken;
-                            tokenEl.style.transition = 'color 0.4s';
-                            tokenEl.style.color = '#059669';
-                            setTimeout(function () { tokenEl.style.color = ''; }, 2000);
-                        }
-                        if (metaEl && data.token_updated_at) {
-                            metaEl.textContent = 'Diperbarui ' + data.token_updated_at;
-                        }
-                        lastToken = newToken;
+            var qrTarget = document.getElementById('exambro-qr-js');
+            if (qrTarget) {
+                try {
+                    if (typeof QRCode === 'function') {
+                        new QRCode(qrTarget, {
+                            text: '{{ $exambroPageUrl }}',
+                            width: 186,
+                            height: 186,
+                            colorDark: '#111827',
+                            colorLight: '#ffffff',
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    } else {
+                        throw new Error('QRCode library unavailable');
                     }
-                    remaining = total;
-                })
-                .catch(function () {
-                    /* Gagal fetch — coba lagi di interval berikutnya */
-                });
-            }
-
-            function tick() {
-                var m = Math.floor(remaining / 60);
-                var s = remaining % 60;
-                countdown.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-                remaining -= 1;
-                if (remaining < 0) {
-                    updateTokenFromApi();
+                } catch (e) {
+                    qrTarget.style.display = 'none';
+                    var fallback = document.getElementById('exambro-qr-fallback');
+                    if (fallback) {
+                        fallback.style.display = 'grid';
+                    }
                 }
             }
 
-            tick();
-            setInterval(tick, 1000);
         })();
     </script>
 </body>

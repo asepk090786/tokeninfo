@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -10,7 +14,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-// use SimpleSoftwareIO\QrCode\Facades\QrCode; // Disabled: putenv() not available on this hosting
 use ZipArchive;
 
 class CbtInfoController extends Controller
@@ -22,8 +25,8 @@ class CbtInfoController extends Controller
     private const SERVER_ACTIVE_USER_TTL_SECONDS = 120;
     private const SERVER_LOGIN_COUNTER_TTL_SECONDS = 7200;
     private const DB_REFRESH_INTERVAL_SECONDS = 300;
-    private const SERVER_STATUS_UP_TTL_SECONDS = 300;
-    private const SERVER_STATUS_DOWN_TTL_SECONDS = 120;
+    private const SERVER_STATUS_UP_TTL_SECONDS = 30;
+    private const SERVER_STATUS_DOWN_TTL_SECONDS = 10;
     private const SERVER_STATUS_KNOWN_TTL_SECONDS = 1800;
     private const SERVER_STATUS_LOCK_SECONDS = 5;
     private const CACHE_KEY_CBT_INFO = 'cbt_info_payload';
@@ -72,6 +75,10 @@ class CbtInfoController extends Controller
 
         $targetHost = parse_url($targetUrl, PHP_URL_HOST);
         if (is_string($targetHost) && strcasecmp($targetHost, $request->getHost()) === 0) {
+            return redirect()->route('cbt.exambro.page');
+        }
+
+        if ((($server['selection_runtime_enabled'] ?? true) !== true)) {
             return redirect()->route('cbt.exambro.page');
         }
 
@@ -136,6 +143,21 @@ class CbtInfoController extends Controller
             'description' => $info->description,
             'servers' => $servers,
         ]);
+    }
+
+    public function mirrorList()
+    {
+        $servers = $this->getConfiguredServers();
+        if ($servers === []) {
+            $servers = $this->legacyServerDefinitions($this->getInfoFromGarudaCbt());
+        }
+
+        $payload = $this->buildMirrorListPayload($servers);
+        $this->writeMirrorListFile($servers);
+
+        return response()
+            ->json($payload)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     public function exambroInfo(Request $request)
@@ -252,12 +274,14 @@ class CbtInfoController extends Controller
             'server_recommended'    => $recommended['url'] ?? null,
 
             'servers' => collect($servers)->map(function ($server) use ($exambroActive) {
+                $selectionRuntimeEnabled = (($server['selection_runtime_enabled'] ?? true) === true);
+
                 return [
                     'key' => $server['key'] ?? null,
                     'name' => $server['name'] ?? null,
                     'url' => $server['url'] ?? null,
                     'status' => ($server['is_up'] ?? false) ? 'up' : 'down',
-                    'selectable' => (($server['is_up'] ?? false) === true) && ! empty($server['url']),
+                    'selectable' => (($server['is_up'] ?? false) === true) && ! empty($server['url']) && $selectionRuntimeEnabled,
                     'country_code' => $server['country_code'] ?? '--',
                     'core' => (int) ($server['core'] ?? 0),
                     'ram' => (string) ($server['ram'] ?? ''),
@@ -267,6 +291,10 @@ class CbtInfoController extends Controller
                     'active_user_ttl_seconds' => self::SERVER_ACTIVE_USER_TTL_SECONDS,
                     'login_indicator' => $server['login_indicator'] ?? 'low',
                     'login_indicator_label' => $server['login_indicator_label'] ?? 'Rendah',
+                    'selection_enabled' => ((bool) ($server['selection_enabled'] ?? true)) === true,
+                    'selection_runtime_enabled' => $selectionRuntimeEnabled,
+                    'selection_disabled_until' => $server['selection_disabled_until'] ?? null,
+                    'selection_timed_disabled' => (($server['selection_timed_disabled'] ?? false) === true),
                 ];
             })->values(),
 
@@ -458,8 +486,9 @@ class CbtInfoController extends Controller
         $exambroEmergencyExitPinSource = $this->hasPersistedExambroEmergencyExitPin() ? 'database' : 'env';
         $userAgentDetectionEnabled = $this->isUserAgentDetectionEnabled();
         $userAgentPatterns = $this->getExambroUserAgentPatternsAsText();
-        $exambroPageUrl      = route('cbt.exambro.page');
-        $exambroApiUrl       = route('cbt.exambro.info');
+        $loadBalancerMirrorCount = $this->countEligibleLoadBalancerServers($servers);
+        $loadBalancerLinkAvailable = $loadBalancerMirrorCount > 1;
+        $mirrorListUrl = url('api/mirror_list.json');
 
         return view('cbt-info.admin', compact(
             'info',
@@ -474,9 +503,10 @@ class CbtInfoController extends Controller
             'userAgentPatterns',
             'exambroWarningValue',
             'exambroTokenVisibleOnPage',
-                        'exambroPinActive',
-            'exambroPageUrl',
-            'exambroApiUrl'
+            'exambroPinActive',
+            'loadBalancerMirrorCount',
+            'loadBalancerLinkAvailable',
+            'mirrorListUrl'
         ));
     }
 
@@ -622,6 +652,9 @@ class CbtInfoController extends Controller
             'ram' => trim((string) ($validated['server_ram'] ?? '8 GB')) ?: '8 GB',
             'capacity' => (int) ($validated['server_capacity'] ?? 40),
             'hidden' => ((bool) ($existingServer['hidden'] ?? false)) === true,
+            'lb_enabled' => ((bool) ($existingServer['lb_enabled'] ?? false)) === true,
+            'selection_enabled' => ((bool) ($existingServer['selection_enabled'] ?? true)) === true,
+            'selection_disabled_until' => $this->normalizeSelectionDisabledUntil((string) ($existingServer['selection_disabled_until'] ?? '')),
         ];
 
         $this->persistConfiguredServers($servers);
@@ -659,6 +692,9 @@ class CbtInfoController extends Controller
             'ram' => trim((string) ($validated['server_ram'] ?? '8 GB')) ?: '8 GB',
             'capacity' => (int) ($validated['server_capacity'] ?? 40),
             'hidden' => false,
+            'lb_enabled' => true,
+            'selection_enabled' => true,
+            'selection_disabled_until' => null,
         ];
 
         $this->persistConfiguredServers($servers);
@@ -731,6 +767,180 @@ class CbtInfoController extends Controller
         $statusText = $servers[$serverIndex]['hidden'] ? 'disembunyikan' : 'ditampilkan';
 
         return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Server berhasil ' . $statusText . '.');
+    }
+
+    public function toggleServerLoadBalancing(Request $request, string $key)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $servers = $this->getConfiguredServers();
+        if ($servers === []) {
+            $servers = $this->legacyServerDefinitions($this->getInfoFromGarudaCbt());
+        }
+
+        $serverIndex = $this->findServerIndexByKey($servers, $key);
+        if ($serverIndex < 0) {
+            abort(404);
+        }
+
+        $isEnabled = ((bool) ($servers[$serverIndex]['lb_enabled'] ?? false)) === true;
+        $activeCount = count(array_filter($servers, function ($server) {
+            return ((bool) ($server['lb_enabled'] ?? false)) === true;
+        }));
+
+        if ($isEnabled && $activeCount <= 1) {
+            return redirect(route('cbt.admin') . '#panel-web')
+                ->withErrors(['server' => 'Minimal harus ada 1 server aktif untuk load balancing.']);
+        }
+
+        $servers[$serverIndex]['lb_enabled'] = ! $isEnabled;
+
+        $this->persistConfiguredServers($servers);
+        $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+        $statusText = $servers[$serverIndex]['lb_enabled'] ? 'diaktifkan' : 'dinonaktifkan';
+
+        return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Server berhasil ' . $statusText . ' untuk load balancing.');
+    }
+
+    public function toggleServerSelection(Request $request, string $key)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $servers = $this->getConfiguredServers();
+        if ($servers === []) {
+            $servers = $this->legacyServerDefinitions($this->getInfoFromGarudaCbt());
+        }
+
+        $serverIndex = $this->findServerIndexByKey($servers, $key);
+        if ($serverIndex < 0) {
+            abort(404);
+        }
+
+        $isEnabled = ((bool) ($servers[$serverIndex]['selection_enabled'] ?? true)) === true;
+        $servers[$serverIndex]['selection_enabled'] = ! $isEnabled;
+
+        if ($servers[$serverIndex]['selection_enabled']) {
+            $servers[$serverIndex]['selection_disabled_until'] = null;
+        }
+
+        $this->persistConfiguredServers($servers);
+        $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+        $statusText = $servers[$serverIndex]['selection_enabled'] ? 'diaktifkan' : 'dinonaktifkan';
+
+        return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Tombol pemilihan server berhasil ' . $statusText . '.');
+    }
+
+    public function setServerSelectionTimer(Request $request, string $key)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $servers = $this->getConfiguredServers();
+        if ($servers === []) {
+            $servers = $this->legacyServerDefinitions($this->getInfoFromGarudaCbt());
+        }
+
+        $serverIndex = $this->findServerIndexByKey($servers, $key);
+        if ($serverIndex < 0) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'disable_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
+            'clear_timer' => ['nullable', 'in:0,1'],
+        ]);
+
+        $clearTimer = ((string) ($validated['clear_timer'] ?? '0')) === '1';
+
+        if ($clearTimer) {
+            $servers[$serverIndex]['selection_enabled'] = true;
+            $servers[$serverIndex]['selection_disabled_until'] = null;
+
+            $this->persistConfiguredServers($servers);
+            $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+            return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Timer pemilihan server berhasil dihapus.');
+        }
+
+        $minutes = (int) ($validated['disable_minutes'] ?? 0);
+        if ($minutes <= 0) {
+            return redirect(route('cbt.admin') . '#panel-web')
+                ->withErrors(['server' => 'Durasi disable server harus diisi.']);
+        }
+
+        $servers[$serverIndex]['selection_enabled'] = false;
+        $servers[$serverIndex]['selection_disabled_until'] = now()->addMinutes($minutes)->toIso8601String();
+
+        $this->persistConfiguredServers($servers);
+        $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+        return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Pemilihan server dinonaktifkan selama ' . $minutes . ' menit.');
+    }
+
+    public function setAllServerSelectionTimer(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $servers = $this->getConfiguredServers();
+        if ($servers === []) {
+            $servers = $this->legacyServerDefinitions($this->getInfoFromGarudaCbt());
+        }
+
+        $validated = $request->validate([
+            'action' => ['required', 'in:set_timer,enable_all,disable_all'],
+            'disable_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
+        ]);
+
+        $action = (string) ($validated['action'] ?? '');
+
+        if ($action === 'enable_all') {
+            foreach ($servers as $index => $server) {
+                $servers[$index]['selection_enabled'] = true;
+                $servers[$index]['selection_disabled_until'] = null;
+            }
+
+            $this->persistConfiguredServers($servers);
+            $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+            return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Semua pilihan server Exambro berhasil diaktifkan.');
+        }
+
+        if ($action === 'disable_all') {
+            foreach ($servers as $index => $server) {
+                $servers[$index]['selection_enabled'] = false;
+                $servers[$index]['selection_disabled_until'] = null;
+            }
+
+            $this->persistConfiguredServers($servers);
+            $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+            return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Semua pilihan server Exambro berhasil dinonaktifkan.');
+        }
+
+        $minutes = (int) ($validated['disable_minutes'] ?? 0);
+        if ($minutes <= 0) {
+            return redirect(route('cbt.admin') . '#panel-web')
+                ->withErrors(['server' => 'Durasi disable untuk semua server harus diisi.']);
+        }
+
+        foreach ($servers as $index => $server) {
+            $servers[$index]['selection_enabled'] = false;
+            $servers[$index]['selection_disabled_until'] = now()->addMinutes($minutes)->toIso8601String();
+        }
+
+        $this->persistConfiguredServers($servers);
+        $this->syncLegacyServerCachesFromConfiguredServers($servers);
+
+        return redirect(route('cbt.admin') . '#panel-web')->with('status', 'Semua pilihan server Exambro dinonaktifkan selama ' . $minutes . ' menit.');
     }
 
     public function update(Request $request)
@@ -1268,20 +1478,34 @@ class CbtInfoController extends Controller
 
         foreach ($servers as &$server) {
             $isUp = $this->isServerUp($server['url']);
+            $serverKey = (string) ($server['key'] ?? '');
+            $isHidden = ((bool) ($server['hidden'] ?? false)) === true;
+            $lbEnabled = ((bool) ($server['lb_enabled'] ?? false)) === true;
+            $hasUrl = ! empty($server['url']) && filter_var((string) $server['url'], FILTER_VALIDATE_URL) !== false;
+            $runtimeLbState = $this->resolveRuntimeLoadBalancerState($serverKey, $isUp, $lbEnabled, ! $isHidden, $hasUrl);
             $loginCount = $this->getServerLoginCount((string) ($server['key'] ?? ''));
             $activeUserCount = $this->getServerActiveUserCount((string) ($server['key'] ?? ''));
             $indicatorMeta = $this->getLoginIndicatorMeta($activeUserCount, (int) ($server['capacity'] ?? 40));
-            $isHidden = ((bool) ($server['hidden'] ?? false)) === true;
 
             $server['is_up'] = $isUp;
             $server['status_label'] = $isUp ? 'SERVER UP' : 'SERVER DOWN';
             $server['status_class'] = $isUp ? 'up' : 'down';
             $server['hidden'] = $isHidden;
+            $server['lb_runtime_enabled'] = $runtimeLbState['runtime_enabled'];
+            $server['auto_lb_excluded'] = $runtimeLbState['excluded'];
+            $server['auto_lb_down_streak'] = $runtimeLbState['down_streak'];
+            $server['auto_lb_disabled_until'] = $runtimeLbState['disabled_until'];
             $server['country_code'] = $this->extractCountryCodeFromUrl($server['url']);
             $server['login_count'] = $loginCount;
             $server['active_user_count'] = $activeUserCount;
             $server['login_indicator'] = $indicatorMeta['key'];
             $server['login_indicator_label'] = $indicatorMeta['label'];
+
+            $selectionRuntime = $this->resolveServerSelectionRuntime($server);
+            $server['selection_enabled'] = ((bool) ($server['selection_enabled'] ?? true)) === true;
+            $server['selection_disabled_until'] = $selectionRuntime['disabled_until'];
+            $server['selection_runtime_enabled'] = $selectionRuntime['runtime_enabled'];
+            $server['selection_timed_disabled'] = $selectionRuntime['timed_disabled'];
         }
         unset($server);
 
@@ -1305,19 +1529,52 @@ class CbtInfoController extends Controller
                 continue;
             }
 
-            $cacheKey = 'server_qr_svg:exambro_page:' . sha1($exambroPageUrl);
-            // Disabled: QrCode library not available due to putenv() restriction on this hosting
-            // $server['qr_svg'] = Cache::remember($cacheKey, now()->addDay(), function () use ($exambroPageUrl) {
-            //     return QrCode::format('svg')
-            //         ->size(200)
-            //         ->margin(1)
-            //         ->generate($exambroPageUrl);
-            // });
-            $server['qr_svg'] = null;
+            $cacheKey = 'server_qr_svg:exambro_page:v3:' . sha1($exambroPageUrl);
+            $server['qr_svg'] = Cache::remember($cacheKey, now()->addDay(), function () use ($exambroPageUrl) {
+                return $this->generateLocalQrSvg($exambroPageUrl, 220);
+            });
         }
         unset($server);
 
         return $servers;
+    }
+
+    private function generateLocalQrSvg(string $value, int $size = 220): ?string
+    {
+        try {
+            $renderer = new ImageRenderer(
+                new RendererStyle(max(120, $size)),
+                new SvgImageBackEnd()
+            );
+
+            $writer = new Writer($renderer);
+
+            return $writer->writeString($value);
+        } catch (\Throwable $e) {
+            if (! function_exists('shell_exec')) {
+                return null;
+            }
+
+            $binary = trim((string) @\shell_exec('command -v qrencode 2>/dev/null'));
+            if ($binary === '') {
+                return null;
+            }
+
+            $sizeOption = max(4, min(16, (int) round($size / 30)));
+            $command = $binary
+                . ' -t SVG'
+                . ' -s ' . $sizeOption
+                . ' -m 1'
+                . ' -o - -- '
+                . escapeshellarg($value);
+
+            $svg = @\shell_exec($command);
+            if (! is_string($svg) || trim($svg) === '' || ! str_contains($svg, '<svg')) {
+                return null;
+            }
+
+            return $svg;
+        }
     }
 
     private function legacyServerDefinitions(object $info): array
@@ -1331,6 +1588,9 @@ class CbtInfoController extends Controller
                 'ram' => (string) ($info->server_primary_ram ?? '8 GB'),
                 'capacity' => max(1, (int) ($info->server_primary_capacity ?? 40)),
                 'hidden' => false,
+                'lb_enabled' => true,
+                'selection_enabled' => true,
+                'selection_disabled_until' => null,
             ],
             [
                 'key' => 'backup1',
@@ -1340,6 +1600,9 @@ class CbtInfoController extends Controller
                 'ram' => (string) ($info->server_backup1_ram ?? '8 GB'),
                 'capacity' => max(1, (int) ($info->server_backup1_capacity ?? 40)),
                 'hidden' => false,
+                'lb_enabled' => true,
+                'selection_enabled' => true,
+                'selection_disabled_until' => null,
             ],
             [
                 'key' => 'backup2',
@@ -1349,13 +1612,34 @@ class CbtInfoController extends Controller
                 'ram' => (string) ($info->server_backup2_ram ?? '8 GB'),
                 'capacity' => max(1, (int) ($info->server_backup2_capacity ?? 40)),
                 'hidden' => false,
+                'lb_enabled' => true,
+                'selection_enabled' => true,
+                'selection_disabled_until' => null,
             ],
         ];
     }
 
     private function selectAvailableServer(array $servers): array
     {
-        $upServers = array_values(array_filter($servers, function ($server) {
+        $serversWithUrl = array_values(array_filter($servers, function ($server) {
+            return ! empty($server['url']);
+        }));
+
+        $lbPool = array_values(array_filter($serversWithUrl, function ($server) {
+            return ((bool) ($server['lb_runtime_enabled'] ?? ($server['lb_enabled'] ?? false))) === true;
+        }));
+
+        if (count($lbPool) > 1) {
+            $candidatePool = $lbPool;
+        } elseif (count($serversWithUrl) > 1) {
+            $candidatePool = $serversWithUrl;
+        } elseif ($serversWithUrl !== []) {
+            $candidatePool = $serversWithUrl;
+        } else {
+            $candidatePool = $servers;
+        }
+
+        $upServers = array_values(array_filter($candidatePool, function ($server) {
             return (($server['is_up'] ?? false) === true) && ! empty($server['url']);
         }));
 
@@ -1377,10 +1661,6 @@ class CbtInfoController extends Controller
             // Jika semua high load, tetap pilih yang paling ringan (least bad), bukan first-up acak.
             return $upServers[0];
         }
-
-        $serversWithUrl = array_values(array_filter($servers, function ($server) {
-            return ! empty($server['url']);
-        }));
 
         if ($serversWithUrl !== []) {
             usort($serversWithUrl, function ($left, $right) {
@@ -1415,9 +1695,10 @@ class CbtInfoController extends Controller
             return false;
         }
 
-        $url = $this->normalizeHealthCheckUrl($url);
+        $candidateUrls = $this->healthCheckCandidates($url);
+        $primaryUrl = $candidateUrls[0] ?? $url;
 
-        $urlHash = sha1($url);
+        $urlHash = sha1($primaryUrl);
         $cacheKey = 'server_up_status:' . $urlHash;
         $knownStatusKey = 'server_up_status_known:' . $urlHash;
         $lockKey = 'server_up_status_lock:' . $urlHash;
@@ -1441,16 +1722,19 @@ class CbtInfoController extends Controller
                 ->timeout($requestTimeout)
                 ->withOptions(['allow_redirects' => true, 'http_errors' => false]);
 
-            // HEAD lebih ringan; jika tidak didukung server, fallback ke GET.
-            $response = $httpClient->head($url);
-            $statusCode = (int) $response->status();
+            foreach ($candidateUrls as $candidateUrl) {
+                $statusCode = $this->fetchHealthStatusCode($httpClient, $candidateUrl);
 
-            if (in_array($statusCode, [405, 501], true)) {
-                $response = $httpClient->get($url);
-                $statusCode = (int) $response->status();
+                if ($statusCode >= 200 && $statusCode < 400) {
+                    $isUp = true;
+                    break;
+                }
+
+                if (in_array($statusCode, [401, 403], true)) {
+                    $isUp = true;
+                    break;
+                }
             }
-
-            $isUp = $statusCode > 0 && $statusCode < 500;
         } catch (\Throwable $e) {
             $isUp = false;
         } finally {
@@ -1460,14 +1744,190 @@ class CbtInfoController extends Controller
         Cache::put(
             $cacheKey,
             $isUp,
-            now()->addSeconds($isUp ? self::SERVER_STATUS_UP_TTL_SECONDS : self::SERVER_STATUS_DOWN_TTL_SECONDS)
+            now()->addSeconds($isUp ? $this->serverStatusUpTtlSeconds() : $this->serverStatusDownTtlSeconds())
         );
         Cache::put($knownStatusKey, $isUp, now()->addSeconds(self::SERVER_STATUS_KNOWN_TTL_SECONDS));
 
         return $isUp;
     }
 
-    private function normalizeHealthCheckUrl(string $url): string
+    private function serverStatusUpTtlSeconds(): int
+    {
+        $seconds = (int) env('SERVER_STATUS_UP_TTL_SECONDS', self::SERVER_STATUS_UP_TTL_SECONDS);
+
+        return max(5, min($seconds, 300));
+    }
+
+    private function serverStatusDownTtlSeconds(): int
+    {
+        $seconds = (int) env('SERVER_STATUS_DOWN_TTL_SECONDS', self::SERVER_STATUS_DOWN_TTL_SECONDS);
+
+        return max(3, min($seconds, 120));
+    }
+
+    private function autoLbDownStreakThreshold(): int
+    {
+        $value = (int) env('SERVER_AUTO_LB_DOWN_STREAK', 3);
+
+        return max(2, min($value, 10));
+    }
+
+    private function autoLbRecoveryUpStreakThreshold(): int
+    {
+        $value = (int) env('SERVER_AUTO_LB_RECOVERY_UP_STREAK', 2);
+
+        return max(1, min($value, 10));
+    }
+
+    private function autoLbCooldownSeconds(): int
+    {
+        $value = (int) env('SERVER_AUTO_LB_COOLDOWN_SECONDS', 90);
+
+        return max(15, min($value, 1800));
+    }
+
+    private function autoLbStateCacheKey(string $serverKey): string
+    {
+        return 'server_auto_lb_state:' . $serverKey;
+    }
+
+    private function resolveRuntimeLoadBalancerState(
+        string $serverKey,
+        bool $isUp,
+        bool $lbEnabled,
+        bool $isVisible,
+        bool $hasUrl
+    ): array {
+        if ($serverKey === '' || ! $lbEnabled || ! $isVisible || ! $hasUrl) {
+            if ($serverKey !== '') {
+                Cache::forget($this->autoLbStateCacheKey($serverKey));
+            }
+
+            return [
+                'runtime_enabled' => false,
+                'excluded' => false,
+                'down_streak' => 0,
+                'disabled_until' => null,
+            ];
+        }
+
+        $cacheKey = $this->autoLbStateCacheKey($serverKey);
+        $state = Cache::get($cacheKey, []);
+        if (! is_array($state)) {
+            $state = [];
+        }
+
+        $downStreak = max(0, (int) ($state['down_streak'] ?? 0));
+        $upStreak = max(0, (int) ($state['up_streak'] ?? 0));
+        $disabledUntilTs = max(0, (int) ($state['disabled_until_ts'] ?? 0));
+        $nowTs = now()->timestamp;
+
+        if ($isUp) {
+            $upStreak++;
+            $downStreak = 0;
+
+            if ($disabledUntilTs > $nowTs && $upStreak >= $this->autoLbRecoveryUpStreakThreshold()) {
+                $disabledUntilTs = 0;
+            }
+        } else {
+            $downStreak++;
+            $upStreak = 0;
+
+            if ($downStreak >= $this->autoLbDownStreakThreshold()) {
+                $disabledUntilTs = max($disabledUntilTs, $nowTs + $this->autoLbCooldownSeconds());
+            }
+        }
+
+        $excluded = $disabledUntilTs > $nowTs;
+
+        Cache::put(
+            $cacheKey,
+            [
+                'down_streak' => $downStreak,
+                'up_streak' => $upStreak,
+                'disabled_until_ts' => $disabledUntilTs,
+            ],
+            now()->addSeconds(max(300, ($this->autoLbCooldownSeconds() * 2)))
+        );
+
+        return [
+            'runtime_enabled' => $lbEnabled && ! $excluded,
+            'excluded' => $excluded,
+            'down_streak' => $downStreak,
+            'disabled_until' => $disabledUntilTs > 0 ? date('c', $disabledUntilTs) : null,
+        ];
+    }
+
+    private function healthCheckCandidates(string $url): array
+    {
+        $url = $this->normalizeLegacyHealthCheckBaseUrl($url);
+        $candidates = [];
+
+        foreach ($this->serverHealthCheckPaths() as $path) {
+            $candidate = $this->buildHealthCheckUrl($url, $path);
+            if ($candidate !== '') {
+                $candidates[$candidate] = $candidate;
+            }
+        }
+
+        $candidates[$url] = $url;
+
+        return array_values($candidates);
+    }
+
+    private function serverHealthCheckPaths(): array
+    {
+        $raw = trim((string) env('SERVER_HEALTH_CHECK_PATHS', '/up,/api/config/health'));
+        $parts = preg_split('/[\r\n,]+/', $raw) ?: [];
+        $paths = [];
+
+        foreach ($parts as $part) {
+            $path = '/' . ltrim(trim((string) $part), '/');
+            if ($path !== '/') {
+                $paths[$path] = $path;
+            }
+        }
+
+        if ($paths === []) {
+            $paths['/up'] = '/up';
+            $paths['/api/config/health'] = '/api/config/health';
+        }
+
+        return array_values($paths);
+    }
+
+    private function buildHealthCheckUrl(string $baseUrl, string $path): string
+    {
+        $parts = parse_url($baseUrl);
+        if (! is_array($parts)) {
+            return '';
+        }
+
+        $scheme = isset($parts['scheme']) ? (string) $parts['scheme'] : 'https';
+        $host = isset($parts['host']) ? (string) $parts['host'] : '';
+        if ($host === '') {
+            return '';
+        }
+
+        $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+
+        return $scheme . '://' . $host . $port . '/' . ltrim($path, '/');
+    }
+
+    private function fetchHealthStatusCode($httpClient, string $url): int
+    {
+        $response = $httpClient->head($url);
+        $statusCode = (int) $response->status();
+
+        if (in_array($statusCode, [405, 501], true)) {
+            $response = $httpClient->get($url);
+            $statusCode = (int) $response->status();
+        }
+
+        return $statusCode;
+    }
+
+    private function normalizeLegacyHealthCheckBaseUrl(string $url): string
     {
         $targetHost = strtolower((string) parse_url($url, PHP_URL_HOST));
         if ($targetHost === '' || strcasecmp($targetHost, self::LEGACY_PUBLIC_HOST) !== 0) {
@@ -1818,9 +2278,17 @@ class CbtInfoController extends Controller
 
     private function getConfiguredServers(): array
     {
+        $mirrorsFromFile = $this->readMirrorListFromFile();
+        if ($mirrorsFromFile !== []) {
+            return $mirrorsFromFile;
+        }
+
         $cached = $this->readPersistedSetting('cbt_servers_list', []);
         if (is_array($cached) && $cached !== []) {
-            return $this->normalizeConfiguredServers($cached);
+            $normalized = $this->normalizeConfiguredServers($cached);
+            $this->ensureMirrorListFileExists($normalized);
+
+            return $normalized;
         }
 
         $meta = $this->readServerMetaFromFile();
@@ -1828,6 +2296,7 @@ class CbtInfoController extends Controller
         if (is_array($serversFromFile) && $serversFromFile !== []) {
             $normalized = $this->normalizeConfiguredServers($serversFromFile);
             $this->writePersistedSetting('cbt_servers_list', $normalized);
+            $this->ensureMirrorListFileExists($normalized);
 
             return $normalized;
         }
@@ -1862,6 +2331,9 @@ class CbtInfoController extends Controller
                 'ram' => trim((string) ($server['ram'] ?? '8 GB')) ?: '8 GB',
                 'capacity' => max(1, (int) ($server['capacity'] ?? 40)),
                 'hidden' => ((bool) ($server['hidden'] ?? false)) === true,
+                'lb_enabled' => ((bool) ($server['lb_enabled'] ?? true)) === true,
+                'selection_enabled' => ((bool) ($server['selection_enabled'] ?? true)) === true,
+                'selection_disabled_until' => $this->normalizeSelectionDisabledUntil((string) ($server['selection_disabled_until'] ?? '')),
             ];
         }
 
@@ -1873,6 +2345,7 @@ class CbtInfoController extends Controller
         $normalized = $this->normalizeConfiguredServers($servers);
         $this->writePersistedSetting('cbt_servers_list', $normalized);
         $this->storeServerMetaToFile(['servers' => $normalized]);
+        $this->writeMirrorListFile($normalized);
     }
 
     private function findServerIndexByKey(array $servers, string $key): int
@@ -1957,6 +2430,196 @@ class CbtInfoController extends Controller
         }
 
         $this->invalidateInfoCaches();
+    }
+
+    private function countEligibleLoadBalancerServers(array $servers): int
+    {
+        return count(array_filter($servers, function ($server) {
+            if (((bool) ($server['hidden'] ?? false)) === true) {
+                return false;
+            }
+
+            $url = trim((string) ($server['url'] ?? ''));
+
+            return $url !== '' && filter_var($url, FILTER_VALIDATE_URL);
+        }));
+    }
+
+    private function mirrorListFilePath(): string
+    {
+        return storage_path('app/private/mirror_list.json');
+    }
+
+    private function readMirrorListFromFile(): array
+    {
+        $path = $this->mirrorListFilePath();
+
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $mirrors = $decoded;
+        if (array_key_exists('mirrors', $decoded) && is_array($decoded['mirrors'])) {
+            $mirrors = $decoded['mirrors'];
+        }
+
+        if (! is_array($mirrors) || $mirrors === []) {
+            return [];
+        }
+
+        return $this->normalizeConfiguredServers($mirrors);
+    }
+
+    private function normalizeSelectionDisabledUntil(string $raw): ?string
+    {
+        $value = trim($raw);
+        if ($value === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return date('c', $timestamp);
+    }
+
+    private function resolveServerSelectionRuntime(array $server): array
+    {
+        $isEnabled = ((bool) ($server['selection_enabled'] ?? true)) === true;
+        $disabledUntil = $this->normalizeSelectionDisabledUntil((string) ($server['selection_disabled_until'] ?? ''));
+
+        if ($disabledUntil === null) {
+            return [
+                'runtime_enabled' => $isEnabled,
+                'timed_disabled' => false,
+                'disabled_until' => null,
+            ];
+        }
+
+        $untilTs = strtotime($disabledUntil);
+        if ($untilTs === false) {
+            return [
+                'runtime_enabled' => $isEnabled,
+                'timed_disabled' => false,
+                'disabled_until' => null,
+            ];
+        }
+
+        $timedDisabled = $untilTs > now()->timestamp;
+
+        return [
+            'runtime_enabled' => $isEnabled && ! $timedDisabled,
+            'timed_disabled' => $timedDisabled,
+            'disabled_until' => date('c', $untilTs),
+        ];
+    }
+
+    private function ensureMirrorListFileExists(array $servers): void
+    {
+        if (File::exists($this->mirrorListFilePath())) {
+            return;
+        }
+
+        $this->writeMirrorListFile($servers);
+    }
+
+    private function writeMirrorListFile(array $servers): void
+    {
+        $path = $this->mirrorListFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        $payload = $this->buildMirrorListPayload($servers);
+
+        File::put($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function buildMirrorListPayload(array $servers): array
+    {
+        $normalized = $this->normalizeConfiguredServers($servers);
+        $eligibleMirrorCount = $this->countEligibleLoadBalancerServers($normalized);
+        $loadBalancingUrl = $eligibleMirrorCount > 1 ? $this->homepageUrl('/go-cbt') : null;
+
+        return [
+            'generated_at' => now()->toIso8601String(),
+            'load_balancing_enabled' => $eligibleMirrorCount > 1,
+            'mirror_count' => $eligibleMirrorCount,
+            'load_balancing_url' => $loadBalancingUrl,
+            'mirrors' => array_map(function ($server) {
+                $url = trim((string) ($server['url'] ?? ''));
+                $isVisible = ((bool) ($server['hidden'] ?? false)) !== true;
+                $lbEnabled = ((bool) ($server['lb_enabled'] ?? true)) === true;
+                $selectionState = $this->resolveServerSelectionRuntime((array) $server);
+                $runtimeState = $this->resolveRuntimeLoadBalancerState(
+                    (string) ($server['key'] ?? ''),
+                    $this->isServerUp($url),
+                    $lbEnabled,
+                    $isVisible,
+                    $url !== '' && filter_var($url, FILTER_VALIDATE_URL) !== false
+                );
+
+                return [
+                    'key' => (string) ($server['key'] ?? ''),
+                    'name' => (string) ($server['name'] ?? ''),
+                    'url' => $url,
+                    'core' => max(1, (int) ($server['core'] ?? 4)),
+                    'ram' => (string) ($server['ram'] ?? '8 GB'),
+                    'capacity' => max(1, (int) ($server['capacity'] ?? 40)),
+                    'hidden' => ! $isVisible,
+                    'lb_enabled' => $lbEnabled,
+                    'selection_enabled' => ((bool) ($server['selection_enabled'] ?? true)) === true,
+                    'selection_runtime_enabled' => (bool) ($selectionState['runtime_enabled'] ?? true),
+                    'selection_disabled_until' => $selectionState['disabled_until'] ?? null,
+                    'lb_runtime_enabled' => (bool) ($runtimeState['runtime_enabled'] ?? false),
+                    'auto_lb_excluded' => (bool) ($runtimeState['excluded'] ?? false),
+                    'auto_lb_down_streak' => (int) ($runtimeState['down_streak'] ?? 0),
+                    'auto_lb_disabled_until' => $runtimeState['disabled_until'] ?? null,
+                    'load_balancer_candidate' => (bool) ($runtimeState['runtime_enabled'] ?? false) && (bool) ($selectionState['runtime_enabled'] ?? true),
+                ];
+            }, $normalized),
+        ];
+    }
+
+    private function homepageUrl(string $path = ''): string
+    {
+        $request = request();
+        $baseUrl = '';
+
+        if ($request instanceof Request) {
+            $host = trim((string) $request->getHost());
+            if ($host !== '') {
+                $baseUrl = $request->getSchemeAndHttpHost();
+            }
+        }
+
+        if ($baseUrl === '') {
+            $baseUrl = trim((string) config('app.url', ''));
+        }
+
+        if ($baseUrl === '' || ! filter_var($baseUrl, FILTER_VALIDATE_URL)) {
+            $baseUrl = url('/');
+        }
+
+        $baseUrl = rtrim($baseUrl, '/');
+        $path = '/' . ltrim($path, '/');
+
+        if ($path === '/') {
+            return $baseUrl;
+        }
+
+        return $baseUrl . $path;
     }
 
     private function storeServerMetaToFile(array $updates): void
