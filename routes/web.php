@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CbtInfoController;
+use App\Http\Controllers\ConfigApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +31,19 @@ Route::match(['GET', 'OPTIONS'], '/api/exambro-token-status', [CbtInfoController
 Route::match(['POST', 'OPTIONS'], '/api/server-presence/heartbeat', [CbtInfoController::class, 'heartbeatServerPresence'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('cbt.server.presence.heartbeat');
+
+// Public config endpoints for Exambro client sync flow:
+// 1) always fetch version.json (no-cache)
+// 2) fetch config.json only when version changes
+Route::match(['GET', 'OPTIONS'], '/api/version.json', [ConfigApiController::class, 'getVersion'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('config.version');
+Route::match(['GET', 'OPTIONS'], '/api/config.json', [ConfigApiController::class, 'getConfig'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('config.file');
+Route::match(['GET', 'OPTIONS'], '/api/config/health', [ConfigApiController::class, 'health'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('config.health');
 
 // Disable all web API endpoints so external apps cannot submit requests.
 Route::any('/api/{any}', function () {

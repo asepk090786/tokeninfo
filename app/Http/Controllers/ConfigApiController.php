@@ -42,9 +42,9 @@ class ConfigApiController extends Controller
     }
 
     /**
-     * Serve config.json dengan aggressive cache (untuk CDN)
-     * URL harus include version: /api/config.json?v=1.0.0
-     * Sehingga CDN bisa cache berbulan-bulan tanpa invalidate
+        * Serve config.json untuk Exambro sync flow.
+        * - URL versioned (?v=...) => cache panjang
+        * - URL tanpa version   => no-cache (lebih aman untuk fallback client)
      */
     public function getConfig(Request $request): Response
     {
@@ -74,10 +74,14 @@ class ConfigApiController extends Controller
                 ->header('ETag', $etag);
         }
 
+        $requestedVersion = trim((string) $request->query('v', ''));
+        $cacheControl = $requestedVersion !== ''
+            ? 'public, max-age=31536000, immutable'
+            : 'no-cache, must-revalidate, max-age=0';
+
         return response($content, 200)
             ->header('Content-Type', 'application/json; charset=utf-8')
-            // Aggressive cache (1 tahun) - aman karena URL include versi
-            ->header('Cache-Control', 'public, max-age=31536000, immutable')
+            ->header('Cache-Control', $cacheControl)
             ->header('ETag', $etag)
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('Access-Control-Allow-Origin', '*')
