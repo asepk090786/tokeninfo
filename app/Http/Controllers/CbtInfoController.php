@@ -641,6 +641,87 @@ class CbtInfoController extends Controller
             ]);
     }
 
+    private function autoSyncExambroSettingsToJsonServers(): void
+    {
+        $settings = $this->getVersionSyncSettings();
+        if (! $settings['enabled'] || $settings['key'] === '') {
+            return;
+        }
+
+        $targets = $this->collectVersionSyncTargets($this->getVersionSyncServers());
+        if ($targets === []) {
+            return;
+        }
+
+        $payload = [
+            'exambro' => $this->buildExambroSyncPayload(),
+            'source_host' => request()->getHost(),
+            'synced_at' => now()->toIso8601String(),
+        ];
+
+        foreach ($targets as $target) {
+            $endpoint = (string) ($target['sync_endpoint'] ?? '');
+            $host = (string) ($target['host'] ?? 'unknown-host');
+
+            if ($endpoint === '' || ! filter_var($endpoint, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            try {
+                Http::connectTimeout($settings['timeout_seconds'])
+                    ->timeout($settings['timeout_seconds'])
+                    ->withHeaders([
+                        'X-Version-Sync-Key' => $settings['key'],
+                        'Accept' => 'application/json',
+                    ])
+                    ->post($endpoint, $payload);
+            } catch (\Throwable $e) {
+                Log::warning('Auto sync Exambro settings to JSON server failed.', [
+                    'host' => $host,
+                    'endpoint' => $endpoint,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function buildExambroSyncPayload(): array
+    {
+        return [
+            'token' => $this->getExambroToken(),
+            'pin_active' => $this->isExambroPinActive() ? 1 : 0,
+            'warning_active' => $this->getExambroWarningValue() === 1 ? 1 : 0,
+            'token_active' => $this->isExambroActive() ? 1 : 0,
+            'show_pin_on_page' => $this->isExambroTokenVisibleOnPage() ? 1 : 0,
+        ];
+    }
+
+    private function applyIncomingExambroSyncPayload(array $payload): void
+    {
+        if (array_key_exists('token', $payload)) {
+            $token = strtoupper(trim((string) $payload['token']));
+            if ($token !== '') {
+                $this->storeExambroToken($token);
+            }
+        }
+
+        if (array_key_exists('pin_active', $payload)) {
+            $this->writeExambroSetting('pin_active', $this->truthy($payload['pin_active']) ? 1 : 0);
+        }
+
+        if (array_key_exists('warning_active', $payload)) {
+            $this->writeExambroSetting('warning_active', $this->truthy($payload['warning_active']) ? 1 : 0);
+        }
+
+        if (array_key_exists('token_active', $payload)) {
+            $this->writeExambroSetting('token_active', $this->truthy($payload['token_active']) ? 1 : 0);
+        }
+
+        if (array_key_exists('show_pin_on_page', $payload)) {
+            $this->writeExambroSetting('show_pin_on_page', $this->truthy($payload['show_pin_on_page']) ? 1 : 0);
+        }
+    }
+
     public function receiveVersionSync(Request $request)
     {
         if ($request->isMethod('OPTIONS')) {
@@ -659,32 +740,48 @@ class CbtInfoController extends Controller
         }
 
         $version = $request->input('version');
-        if (! is_array($version)) {
+        $exambro = $request->input('exambro');
+        $hasVersion = is_array($version);
+        $hasExambro = is_array($exambro);
+
+        if (! $hasVersion && ! $hasExambro) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Invalid version payload.',
+                'message' => 'Invalid sync payload.',
             ], 422)->withHeaders($this->corsHeaders($request));
         }
 
-        $configVersion = trim((string) ($version['config_version'] ?? ''));
-        if ($configVersion === '') {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'config_version is required.',
-            ], 422)->withHeaders($this->corsHeaders($request));
+        $configVersion = null;
+
+        if ($hasVersion) {
+            $configVersion = trim((string) ($version['config_version'] ?? ''));
+            if ($configVersion === '') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'config_version is required.',
+                ], 422)->withHeaders($this->corsHeaders($request));
+            }
+
+            $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
+            $version['config_url'] = $baseUrl . '/api/config.json';
+            $version['config_url_versioned'] = $baseUrl . '/api/config.json?v=' . rawurlencode($configVersion);
+            $version['last_updated'] = now()->toIso8601String();
+            $version['timestamp'] = now()->timestamp * 1000;
+
+            $this->writeVersionPayloadToFile($version);
         }
 
-        $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
-        $version['config_url'] = $baseUrl . '/api/config.json';
-        $version['config_url_versioned'] = $baseUrl . '/api/config.json?v=' . rawurlencode($configVersion);
-        $version['last_updated'] = now()->toIso8601String();
-        $version['timestamp'] = now()->timestamp * 1000;
-
-        $this->writeVersionPayloadToFile($version);
+        if ($hasExambro) {
+            $this->applyIncomingExambroSyncPayload($exambro);
+        }
 
         return response()->json([
             'status' => 'ok',
             'config_version' => $configVersion,
+            'synced_sections' => [
+                'version' => $hasVersion,
+                'exambro' => $hasExambro,
+            ],
             'synced_at' => now()->toIso8601String(),
         ])->withHeaders($this->corsHeaders($request));
     }
@@ -1275,6 +1372,7 @@ class CbtInfoController extends Controller
         }
 
         $this->storeExambroToken($newToken);
+        $this->autoSyncExambroSettingsToJsonServers();
 
         return redirect()->route('cbt.admin')->with('status', 'PIN Exambro berhasil digenerate dan dipisahkan dari token soal.');
     }
@@ -1289,6 +1387,7 @@ class CbtInfoController extends Controller
         $nextValue = $currentValue === 1 ? 0 : 1;
 
         $this->writeExambroSetting('warning_active', $nextValue);
+        $this->autoSyncExambroSettingsToJsonServers();
 
         return redirect()->route('cbt.admin')->with('status', 'Pengaturan peringatan Exambro diubah menjadi ' . ($nextValue === 1 ? 'ON (1)' : 'OFF (0)') . '.');
     }
@@ -1315,6 +1414,7 @@ class CbtInfoController extends Controller
 
         $currentStatus = $this->isExambroPinActive();
         $this->writeExambroSetting('pin_active', ! $currentStatus);
+        $this->autoSyncExambroSettingsToJsonServers();
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
