@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CbtInfoController;
 use App\Http\Controllers\ConfigApiController;
+use App\Http\Controllers\GitHubWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -14,6 +15,10 @@ Route::get('/exambro', [CbtInfoController::class, 'exambroPage'])
 Route::get('/exambro/connect/{serverKey}', [CbtInfoController::class, 'connectServer'])
     ->middleware('exambro.key')
     ->name('cbt.exambro.connect');
+
+Route::post('/webhook/github', [GitHubWebhookController::class, 'handle'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('webhook.github');
 
 // Public read-only endpoints needed by Exambro page.
 Route::match(['GET', 'OPTIONS'], '/api/exambro-info', [CbtInfoController::class, 'exambroInfo'])

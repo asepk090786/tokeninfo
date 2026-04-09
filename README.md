@@ -7,6 +7,42 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## GitHub Webhook Auto Update
+
+This app can receive GitHub `push` webhooks and update branch references automatically without running manual git commands.
+
+### Environment
+
+Set these variables in `.env`:
+
+```env
+AUTO_UPDATE_ENABLED=true
+AUTO_UPDATE_REPO_PATH=/www/wwwroot/tokeninfo
+AUTO_UPDATE_REMOTE=origin
+AUTO_UPDATE_BRANCH=master
+AUTO_UPDATE_ALLOWED_BRANCHES=*
+AUTO_UPDATE_IGNORE_DIRTY_PATHS=.env,bootstrap/cache/.gitignore,storage/*.gitignore
+AUTO_UPDATE_RUN_COMPOSER=false
+AUTO_UPDATE_RUN_MIGRATE=false
+GITHUB_WEBHOOK_SECRET=replace-with-a-random-secret
+```
+
+### GitHub Webhook
+
+- Payload URL: `https://your-domain/webhook/github`
+- Content type: `application/json`
+- Secret: same value as `GITHUB_WEBHOOK_SECRET`
+- Events: `Just the push event`
+
+### Behavior
+
+- Every push triggers `git fetch` for all remote branches.
+- If the pushed branch is the branch currently checked out and the working tree is clean, the app runs a fast-forward pull immediately.
+- If the pushed branch is not active, the local branch reference is fast-forwarded safely.
+- If a local branch has diverged or has unpushed commits, the webhook skips that branch instead of overwriting it.
+- Operational files listed in `AUTO_UPDATE_IGNORE_DIRTY_PATHS` are ignored when checking whether the worktree is safe to fast-forward.
+- After updating the active branch, the app runs `php artisan optimize:clear` and can optionally run Composer or migrations based on env settings.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
