@@ -20,6 +20,18 @@
 - Update backend IPs before apply.
 - Reload service and confirm no syntax errors.
 
+### Quick way (recommended, no-ribet when replacing VPS)
+- Copy `scripts/lb/lb.env.example` to `scripts/lb/lb.env` on LB host.
+- Edit only `BACKEND_NODES` when VPS changes.
+- Apply in one command:
+
+```bash
+cd /path/to/repo/scripts/lb
+./apply-nginx-lb.sh ./lb.env
+```
+
+- This will generate config, run `nginx -t`, and reload nginx safely.
+
 ## 4) App Config URLs (must remain single-domain)
 - `https://token.sman1pontang.biz.id/api/version.json`
 - `https://token.sman1pontang.biz.id/api/config.json`

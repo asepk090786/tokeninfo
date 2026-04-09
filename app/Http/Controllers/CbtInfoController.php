@@ -12,13 +12,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use ZipArchive;
 
 class CbtInfoController extends Controller
 {
-    private const LEGACY_PUBLIC_HOST = 'token.sman1-pontang.sch.id';
     private const SERVER_LOGIN_COUNTER_PREFIX = 'server_login_count:';
     private const SERVER_ACTIVE_MEMBER_PREFIX = 'server_active_member:';
     private const SERVER_ACTIVE_INDEX_PREFIX = 'server_active_index:';
@@ -153,7 +153,6 @@ class CbtInfoController extends Controller
         }
 
         $payload = $this->buildMirrorListPayload($servers);
-        $this->writeMirrorListFile($servers);
 
         return response()
             ->json($payload)
@@ -483,12 +482,18 @@ class CbtInfoController extends Controller
         $exambroToken        = $this->getExambroToken();
         $exambroTokenSource  = $this->getExambroTokenSource();
         $exambroEmergencyExitPin = $this->getExambroEmergencyExitPin();
-        $exambroEmergencyExitPinSource = $this->hasPersistedExambroEmergencyExitPin() ? 'database' : 'env';
+        $exambroEmergencyExitPinSource = $this->hasPersistedExambroEmergencyExitPin() ? 'file' : 'env';
         $userAgentDetectionEnabled = $this->isUserAgentDetectionEnabled();
         $userAgentPatterns = $this->getExambroUserAgentPatternsAsText();
         $loadBalancerMirrorCount = $this->countEligibleLoadBalancerServers($servers);
         $loadBalancerLinkAvailable = $loadBalancerMirrorCount > 1;
         $mirrorListUrl = url('api/mirror_list.json');
+        $versionSyncSettings = $this->getVersionSyncSettings();
+        $versionSyncServers = $this->getVersionSyncServers();
+        $versionSyncTargets = $this->collectVersionSyncTargets($versionSyncServers);
+        $versionSyncServersText = $this->exportVersionSyncServersAsText($versionSyncServers);
+        $versionData = $this->readVersionPayloadFromFile();
+        $currentConfigVersion = trim((string) ($versionData['config_version'] ?? ''));
 
         return view('cbt-info.admin', compact(
             'info',
@@ -506,8 +511,182 @@ class CbtInfoController extends Controller
             'exambroPinActive',
             'loadBalancerMirrorCount',
             'loadBalancerLinkAvailable',
-            'mirrorListUrl'
+            'mirrorListUrl',
+            'versionSyncSettings',
+            'versionSyncServers',
+            'versionSyncTargets',
+            'versionSyncServersText',
+            'currentConfigVersion'
         ));
+    }
+
+    public function updateVersionSyncServers(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'version_sync_servers_text' => ['nullable', 'string', 'max:20000'],
+        ]);
+
+        $rawText = (string) ($validated['version_sync_servers_text'] ?? '');
+        $servers = $this->parseVersionSyncServersText($rawText);
+        $this->writePersistedSetting('version_sync_servers', $servers);
+
+        return redirect('/admin/cbt-info#panel-version-sync-servers')
+            ->with('status', 'Daftar server sinkron version.json berhasil diperbarui.');
+    }
+
+    public function updateVersionSyncSettings(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'version_sync_enabled' => ['nullable', 'in:0,1'],
+            'version_sync_key' => ['nullable', 'string', 'min:16', 'max:128', 'regex:/^[A-Za-z0-9_\-]+$/'],
+            'version_sync_timeout_seconds' => ['nullable', 'integer', 'min:1', 'max:5'],
+        ]);
+
+        $enabled = (($validated['version_sync_enabled'] ?? '0') === '1');
+        $syncKey = trim((string) ($validated['version_sync_key'] ?? ''));
+        $timeoutSeconds = (int) ($validated['version_sync_timeout_seconds'] ?? 2);
+
+        $this->writePersistedSetting('version_sync_enabled', $enabled ? 1 : 0);
+        $this->writePersistedSetting('version_sync_key', $syncKey);
+        $this->writePersistedSetting('version_sync_timeout_seconds', max(1, min($timeoutSeconds, 5)));
+
+        return redirect('/admin/cbt-info#panel-version-sync')
+            ->with('status', 'Pengaturan sinkronisasi version.json berhasil diperbarui.');
+    }
+
+    public function syncVersionNow(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $settings = $this->getVersionSyncSettings();
+        if (! $settings['enabled']) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'Sinkronisasi belum diaktifkan. Aktifkan dulu pada panel Version Sync.']);
+        }
+
+        if ($settings['key'] === '') {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'Sync Key kosong. Isi Sync Key terlebih dahulu.']);
+        }
+
+        $payload = $this->readVersionPayloadFromFile();
+        if ($payload === []) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'File version.json tidak valid atau tidak ditemukan.']);
+        }
+
+        $targets = $this->collectVersionSyncTargets($this->getVersionSyncServers());
+
+        if ($targets === []) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'Tidak ada target mirror valid untuk sinkronisasi.']);
+        }
+
+        $successCount = 0;
+        $failedHosts = [];
+
+        foreach ($targets as $target) {
+            $endpoint = (string) ($target['sync_endpoint'] ?? '');
+            $host = (string) ($target['host'] ?? 'unknown-host');
+
+            if ($endpoint === '' || ! filter_var($endpoint, FILTER_VALIDATE_URL)) {
+                $failedHosts[] = $host;
+                continue;
+            }
+
+            try {
+                $response = Http::connectTimeout($settings['timeout_seconds'])
+                    ->timeout($settings['timeout_seconds'])
+                    ->withHeaders([
+                        'X-Version-Sync-Key' => $settings['key'],
+                        'Accept' => 'application/json',
+                    ])
+                    ->post($endpoint, [
+                        'version' => $payload,
+                        'source_host' => request()->getHost(),
+                        'synced_at' => now()->toIso8601String(),
+                    ]);
+
+                if ($response->successful()) {
+                    $successCount++;
+                } else {
+                    $failedHosts[] = $host;
+                }
+            } catch (\Throwable $e) {
+                $failedHosts[] = $host;
+            }
+        }
+
+        $targetCount = count($targets);
+        if ($successCount === $targetCount) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->with('status', "Sinkronisasi version.json berhasil ke {$successCount}/{$targetCount} server JSON.");
+        }
+
+        $failedLabel = implode(', ', array_slice($failedHosts, 0, 5));
+
+        return redirect('/admin/cbt-info#panel-version-sync')
+            ->withErrors([
+                'version_sync' => "Sinkronisasi parsial: berhasil {$successCount}/{$targetCount}. Gagal: {$failedLabel}",
+            ]);
+    }
+
+    public function receiveVersionSync(Request $request)
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204)->withHeaders($this->corsHeaders($request));
+        }
+
+        $settings = $this->getVersionSyncSettings();
+        $configuredKey = $settings['key'];
+        $providedKey = trim((string) $request->header('X-Version-Sync-Key', ''));
+
+        if ($configuredKey === '' || $providedKey === '' || ! hash_equals($configuredKey, $providedKey)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid sync key.',
+            ], 401)->withHeaders($this->corsHeaders($request));
+        }
+
+        $version = $request->input('version');
+        if (! is_array($version)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid version payload.',
+            ], 422)->withHeaders($this->corsHeaders($request));
+        }
+
+        $configVersion = trim((string) ($version['config_version'] ?? ''));
+        if ($configVersion === '') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'config_version is required.',
+            ], 422)->withHeaders($this->corsHeaders($request));
+        }
+
+        $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
+        $version['config_url'] = $baseUrl . '/api/config.json';
+        $version['config_url_versioned'] = $baseUrl . '/api/config.json?v=' . rawurlencode($configVersion);
+        $version['last_updated'] = now()->toIso8601String();
+        $version['timestamp'] = now()->timestamp * 1000;
+
+        $this->writeVersionPayloadToFile($version);
+
+        return response()->json([
+            'status' => 'ok',
+            'config_version' => $configVersion,
+            'synced_at' => now()->toIso8601String(),
+        ])->withHeaders($this->corsHeaders($request));
     }
 
     public function updateUserAgentSettings(Request $request)
@@ -528,8 +707,8 @@ class CbtInfoController extends Controller
                 ->withErrors(['user_agent_patterns' => 'Daftar keyword User-Agent tidak boleh kosong.']);
         }
 
-        $this->writePersistedSetting('exambro_user_agent_detection_enabled', $enabled ? 1 : 0);
-        $this->writePersistedSetting('exambro_user_agent_patterns', implode("\n", $patterns));
+        $this->writeExambroSetting('user_agent_detection_enabled', $enabled ? 1 : 0);
+        $this->writeExambroSetting('user_agent_patterns', implode("\n", $patterns));
 
         return redirect('/admin/cbt-info#panel-user-agent')
             ->with('status', 'Pengaturan User-Agent berhasil diperbarui.');
@@ -546,7 +725,7 @@ class CbtInfoController extends Controller
         ]);
 
         $pin = trim((string) $validated['exambro_exit_emergency_pin']);
-        $this->writePersistedSetting('exambro_exit_emergency_pin', $pin);
+        $this->writeExambroSetting('exit_emergency_pin', $pin);
 
         return redirect('/admin/cbt-info#panel-token-pin')
             ->with('status', 'PIN darurat Exit Exambro berhasil diperbarui.');
@@ -1067,7 +1246,7 @@ class CbtInfoController extends Controller
         }
 
         $currentStatus = $this->isExambroActive();
-        $this->writePersistedSetting('exambro_token_active', ! $currentStatus);
+        $this->writeExambroSetting('token_active', ! $currentStatus);
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
@@ -1109,7 +1288,7 @@ class CbtInfoController extends Controller
         $currentValue = $this->getExambroWarningValue();
         $nextValue = $currentValue === 1 ? 0 : 1;
 
-        $this->writePersistedSetting('exambro_warning_active', $nextValue);
+        $this->writeExambroSetting('warning_active', $nextValue);
 
         return redirect()->route('cbt.admin')->with('status', 'Pengaturan peringatan Exambro diubah menjadi ' . ($nextValue === 1 ? 'ON (1)' : 'OFF (0)') . '.');
     }
@@ -1123,7 +1302,7 @@ class CbtInfoController extends Controller
         $currentValue = $this->isExambroTokenVisibleOnPage();
         $nextValue = $currentValue ? 0 : 1;
 
-        $this->writePersistedSetting('exambro_show_pin_on_page', $nextValue);
+        $this->writeExambroSetting('show_pin_on_page', $nextValue);
 
         return redirect()->route('cbt.admin')->with('status', 'Tampilan PIN Exambro di halaman Exambro diubah menjadi ' . ($nextValue === 1 ? 'TAMPIL' : 'SEMBUNYI') . '.');
     }
@@ -1135,7 +1314,7 @@ class CbtInfoController extends Controller
         }
 
         $currentStatus = $this->isExambroPinActive();
-        $this->writePersistedSetting('exambro_pin_active', ! $currentStatus);
+        $this->writeExambroSetting('pin_active', ! $currentStatus);
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
@@ -1213,7 +1392,7 @@ class CbtInfoController extends Controller
 
     private function isExambroActive(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_token_active', false);
+        $raw = $this->readExambroSetting('token_active', false);
 
         if (is_bool($raw)) {
             return $raw;
@@ -1234,7 +1413,7 @@ class CbtInfoController extends Controller
 
     private function isExambroPinActive(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_pin_active', true);
+        $raw = $this->readExambroSetting('pin_active', true);
 
         if (is_bool($raw)) {
             return $raw;
@@ -1255,7 +1434,7 @@ class CbtInfoController extends Controller
 
     private function getExambroEmergencyExitPin(): string
     {
-        $persisted = trim((string) $this->readPersistedSetting('exambro_exit_emergency_pin', ''));
+        $persisted = trim((string) $this->readExambroSetting('exit_emergency_pin', ''));
         if ($persisted !== '') {
             return $persisted;
         }
@@ -1270,19 +1449,19 @@ class CbtInfoController extends Controller
 
     private function hasPersistedExambroEmergencyExitPin(): bool
     {
-        return trim((string) $this->readPersistedSetting('exambro_exit_emergency_pin', '')) !== '';
+        return trim((string) $this->readExambroSetting('exit_emergency_pin', '')) !== '';
     }
 
     private function getExambroToken(): string
     {
-        $persistedToken = strtoupper(trim((string) $this->readPersistedSetting('exambro_token', '')));
+        $persistedToken = strtoupper(trim((string) $this->readExambroSetting('token', '')));
         if ($persistedToken !== '') {
             return $persistedToken;
         }
 
         $fileToken = $this->readExambroTokenFromFile();
         if ($fileToken !== '') {
-            $this->writePersistedSetting('exambro_token', $fileToken);
+            $this->writeExambroSetting('token', $fileToken);
 
             return $fileToken;
         }
@@ -1292,8 +1471,8 @@ class CbtInfoController extends Controller
 
     private function getExambroTokenSource(): string
     {
-        if (trim((string) $this->readPersistedSetting('exambro_token', '')) !== '') {
-            return 'db';
+        if (trim((string) $this->readExambroSetting('token', '')) !== '') {
+            return 'file';
         }
 
         return $this->readExambroTokenFromFile() !== '' ? 'web' : 'env';
@@ -1326,7 +1505,7 @@ class CbtInfoController extends Controller
 
     private function storeExambroToken(string $token): void
     {
-        $this->writePersistedSetting('exambro_token', strtoupper(trim($token)));
+        $this->writeExambroSetting('token', strtoupper(trim($token)));
 
         $path = $this->exambroTokenFilePath();
         $directory = dirname($path);
@@ -1341,9 +1520,74 @@ class CbtInfoController extends Controller
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
+    private function exambroSettingsFilePath(): string
+    {
+        return storage_path('app/private/exambro-settings.json');
+    }
+
+    private function readAllExambroSettings(): array
+    {
+        $path = $this->exambroSettingsFilePath();
+
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function writeAllExambroSettings(array $settings): void
+    {
+        $path = $this->exambroSettingsFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        $settings['updated_at'] = now()->toIso8601String();
+        File::put($path, json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $this->cacheForgetSafely(self::CACHE_KEY_CBT_INFO);
+    }
+
+    private function readExambroSetting(string $key, mixed $default = null): mixed
+    {
+        $cacheKey = 'exambro_setting:' . $key;
+        $cached = Cache::get($cacheKey, '__missing__');
+
+        if ($cached !== '__missing__') {
+            return $cached;
+        }
+
+        $settings = $this->readAllExambroSettings();
+
+        if (! array_key_exists($key, $settings)) {
+            return $default;
+        }
+
+        $value = $settings[$key];
+        $this->cacheForeverSafely($cacheKey, $value);
+
+        return $value;
+    }
+
+    private function writeExambroSetting(string $key, mixed $value): void
+    {
+        $cacheKey = 'exambro_setting:' . $key;
+        $this->cacheForeverSafely($cacheKey, $value);
+        $this->cacheForgetSafely(self::CACHE_KEY_CBT_INFO);
+
+        $settings = $this->readAllExambroSettings();
+        $settings[$key] = $value;
+        $this->writeAllExambroSettings($settings);
+    }
+
     private function getExambroWarningValue(): int
     {
-        $raw = $this->readPersistedSetting('exambro_warning_active', 1);
+        $raw = $this->readExambroSetting('warning_active', 1);
 
         if (is_int($raw) || is_float($raw)) {
             return ((int) $raw) === 1 ? 1 : 0;
@@ -1364,7 +1608,7 @@ class CbtInfoController extends Controller
 
     private function isExambroTokenVisibleOnPage(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_show_pin_on_page', 1);
+        $raw = $this->readExambroSetting('show_pin_on_page', 1);
 
         if (is_bool($raw)) {
             return $raw;
@@ -1930,17 +2174,25 @@ class CbtInfoController extends Controller
     private function normalizeLegacyHealthCheckBaseUrl(string $url): string
     {
         $targetHost = strtolower((string) parse_url($url, PHP_URL_HOST));
-        if ($targetHost === '' || strcasecmp($targetHost, self::LEGACY_PUBLIC_HOST) !== 0) {
+        if ($targetHost === '') {
             return $url;
         }
 
-        $appUrl = trim((string) config('app.url', ''));
-        if ($appUrl === '' || ! filter_var($appUrl, FILTER_VALIDATE_URL)) {
+        $legacyHosts = $this->legacyPublicHosts();
+        if ($legacyHosts === [] || ! in_array($targetHost, $legacyHosts, true)) {
             return $url;
         }
 
-        $appScheme = strtolower((string) parse_url($appUrl, PHP_URL_SCHEME));
-        $appHost = strtolower((string) parse_url($appUrl, PHP_URL_HOST));
+        $currentBaseUrl = $this->resolveCurrentBaseUrl();
+        if ($currentBaseUrl === '' || ! filter_var($currentBaseUrl, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+
+        $appScheme = strtolower((string) parse_url($currentBaseUrl, PHP_URL_SCHEME));
+        $appHost = strtolower((string) parse_url($currentBaseUrl, PHP_URL_HOST));
+        $appPort = parse_url($currentBaseUrl, PHP_URL_PORT);
+        $appPortSuffix = is_int($appPort) ? ':' . $appPort : '';
+
         if ($appHost === '' || strcasecmp($appHost, $targetHost) === 0) {
             return $url;
         }
@@ -1954,7 +2206,42 @@ class CbtInfoController extends Controller
         $query = isset($parts['query']) ? '?' . (string) $parts['query'] : '';
         $fragment = isset($parts['fragment']) ? '#' . (string) $parts['fragment'] : '';
 
-        return ($appScheme !== '' ? $appScheme : 'https') . '://' . $appHost . $path . $query . $fragment;
+        return ($appScheme !== '' ? $appScheme : 'https') . '://' . $appHost . $appPortSuffix . $path . $query . $fragment;
+    }
+
+    private function legacyPublicHosts(): array
+    {
+        $raw = trim((string) env('LEGACY_PUBLIC_HOSTS', ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        $parts = preg_split('/[\r\n,]+/', $raw) ?: [];
+        $hosts = [];
+
+        foreach ($parts as $part) {
+            $host = strtolower(trim((string) $part));
+            if ($host !== '') {
+                $hosts[$host] = $host;
+            }
+        }
+
+        return array_values($hosts);
+    }
+
+    private function resolveCurrentBaseUrl(): string
+    {
+        $request = request();
+        if ($request instanceof Request) {
+            $host = trim((string) $request->getHost());
+            if ($host !== '') {
+                return $request->getSchemeAndHttpHost();
+            }
+        }
+
+        $appUrl = trim((string) config('app.url', ''));
+
+        return $appUrl;
     }
 
     private function serverLoginCacheKey(string $serverKey): string
@@ -2209,7 +2496,7 @@ class CbtInfoController extends Controller
 
     private function isUserAgentDetectionEnabled(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_user_agent_detection_enabled', 1);
+        $raw = $this->readExambroSetting('user_agent_detection_enabled', 1);
 
         if (is_bool($raw)) {
             return $raw;
@@ -2228,7 +2515,7 @@ class CbtInfoController extends Controller
 
     private function getExambroUserAgentPatterns(): array
     {
-        $stored = (string) $this->readPersistedSetting('exambro_user_agent_patterns', 'exambro');
+        $stored = (string) $this->readExambroSetting('user_agent_patterns', 'exambro');
 
         return $this->normalizeUserAgentPatterns($stored);
     }
@@ -2448,6 +2735,202 @@ class CbtInfoController extends Controller
     private function mirrorListFilePath(): string
     {
         return storage_path('app/private/mirror_list.json');
+    }
+
+    private function versionFilePath(): string
+    {
+        return public_path('api/version.json');
+    }
+
+    private function readVersionPayloadFromFile(): array
+    {
+        $path = $this->versionFilePath();
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function writeVersionPayloadToFile(array $payload): void
+    {
+        $path = $this->versionFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        File::put($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function getVersionSyncSettings(): array
+    {
+        $enabledRaw = $this->readPersistedSetting('version_sync_enabled', 0);
+        $key = trim((string) $this->readPersistedSetting('version_sync_key', ''));
+        $timeout = (int) $this->readPersistedSetting('version_sync_timeout_seconds', 2);
+
+        return [
+            'enabled' => $this->truthy($enabledRaw),
+            'key' => $key,
+            'timeout_seconds' => max(1, min($timeout, 5)),
+        ];
+    }
+
+    private function getVersionSyncServers(): array
+    {
+        $stored = $this->readPersistedSetting('version_sync_servers', []);
+
+        if (! is_array($stored)) {
+            return [];
+        }
+
+        return $this->normalizeVersionSyncServers($stored);
+    }
+
+    private function collectVersionSyncTargets(array $syncServers): array
+    {
+        $request = request();
+        $currentHost = $request instanceof Request ? strtolower((string) $request->getHost()) : '';
+        $targets = [];
+
+        foreach ($syncServers as $server) {
+            if (! is_array($server)) {
+                continue;
+            }
+
+            $url = trim((string) ($server['url'] ?? ''));
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+            if ($host === '' || ($currentHost !== '' && strcasecmp($host, $currentHost) === 0)) {
+                continue;
+            }
+
+            $baseUrl = rtrim($url, '/');
+
+            $targets[$host] = [
+                'host' => $host,
+                'name' => trim((string) ($server['name'] ?? $host)) ?: $host,
+                'base_url' => $baseUrl,
+                'sync_endpoint' => $baseUrl . '/api/internal/version-sync',
+            ];
+        }
+
+        return array_values($targets);
+    }
+
+    private function normalizeVersionSyncServers(array $servers): array
+    {
+        $normalized = [];
+
+        foreach ($servers as $server) {
+            if (! is_array($server)) {
+                continue;
+            }
+
+            $url = trim((string) ($server['url'] ?? ''));
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+            if ($host === '') {
+                continue;
+            }
+
+            $normalized[$host] = [
+                'name' => trim((string) ($server['name'] ?? $host)) ?: $host,
+                'url' => rtrim($url, '/'),
+            ];
+        }
+
+        return array_values($normalized);
+    }
+
+    private function parseVersionSyncServersText(string $rawText): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $rawText) ?: [];
+        $servers = [];
+
+        foreach ($lines as $line) {
+            $value = trim((string) $line);
+            if ($value === '' || str_starts_with($value, '#')) {
+                continue;
+            }
+
+            $name = '';
+            $url = $value;
+
+            if (str_contains($value, '|')) {
+                [$namePart, $urlPart] = array_pad(explode('|', $value, 2), 2, '');
+                $name = trim((string) $namePart);
+                $url = trim((string) $urlPart);
+            }
+
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+            if ($host === '') {
+                continue;
+            }
+
+            $servers[$host] = [
+                'name' => $name !== '' ? $name : $host,
+                'url' => rtrim($url, '/'),
+            ];
+        }
+
+        return array_values($servers);
+    }
+
+    private function exportVersionSyncServersAsText(array $servers): string
+    {
+        if ($servers === []) {
+            return '';
+        }
+
+        $lines = [];
+
+        foreach ($servers as $server) {
+            if (! is_array($server)) {
+                continue;
+            }
+
+            $name = trim((string) ($server['name'] ?? ''));
+            $url = trim((string) ($server['url'] ?? ''));
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $lines[] = ($name !== '' ? $name : 'Server') . '|' . $url;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function truthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return ((int) $value) === 1;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on', 'active', 'aktif'], true);
+        }
+
+        return false;
     }
 
     private function readMirrorListFromFile(): array
@@ -2701,7 +3184,7 @@ class CbtInfoController extends Controller
         $decoded = json_decode((string) $row->setting_value, true);
         $value = json_last_error() === JSON_ERROR_NONE ? $decoded : $row->setting_value;
 
-        Cache::forever($cacheKey, $value);
+        $this->cacheForeverSafely($cacheKey, $value);
 
         return $value;
     }
@@ -2709,9 +3192,9 @@ class CbtInfoController extends Controller
     private function writePersistedSetting(string $key, mixed $value): void
     {
         $cacheKey = 'web_setting:' . $key;
-        Cache::forever($cacheKey, $value);
-        Cache::forever($key, $value);
-        Cache::forget(self::CACHE_KEY_CBT_INFO);
+        $this->cacheForeverSafely($cacheKey, $value);
+        $this->cacheForeverSafely($key, $value);
+        $this->cacheForgetSafely(self::CACHE_KEY_CBT_INFO);
 
         if (! $this->ensureWebSettingsTable()) {
             return;
@@ -2733,6 +3216,51 @@ class CbtInfoController extends Controller
             ['setting_key' => $key],
             $payload
         );
+    }
+
+    private function cacheForeverSafely(string $key, mixed $value): void
+    {
+        $this->prepareFileCacheDirectory($key);
+
+        try {
+            Cache::forever($key, $value);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to persist cache entry.', [
+                'cache_key' => $key,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function cacheForgetSafely(string $key): void
+    {
+        try {
+            Cache::forget($key);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to forget cache entry.', [
+                'cache_key' => $key,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function prepareFileCacheDirectory(string $key): void
+    {
+        if ((string) config('cache.default') !== 'file') {
+            return;
+        }
+
+        $basePath = (string) config('cache.stores.file.path', '');
+        if ($basePath === '') {
+            return;
+        }
+
+        $hash = sha1($key);
+        $directory = $basePath . '/' . substr($hash, 0, 2) . '/' . substr($hash, 2, 2);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true, true);
+        }
     }
 
     private function matchesExambroUserAgent(?string $userAgent): bool

@@ -4,8 +4,10 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -13,6 +15,7 @@ class ExambroApiKey
 {
     private const APP_NAME_CACHE_KEY = 'exambro_app_name';
     private const APP_NAME_CACHE_TTL_SECONDS = 120;
+    private const REJECT_LOG_TTL_SECONDS = 60;
 
     public function handle(Request $request, Closure $next)
     {
@@ -55,13 +58,39 @@ class ExambroApiKey
 
         $this->logRejectedRequest($request, 401, 'user_agent_not_allowed');
 
-        return response()->json([
+        $payload = [
             'status'  => 'error',
             'message' => 'Unauthorized. Akses hanya untuk aplikasi Exambro yang valid.',
             'app_name' => $appName,
             'application_name' => $appName,
             'nama_aplikasi' => $appName,
-        ], 401)->withHeaders($this->corsHeaders($request));
+        ];
+
+        if ($this->shouldRenderHtmlUnauthorized($request)) {
+            return response()
+                ->view('cbt-info.exambro-unauthorized', [
+                    'appName' => $appName,
+                    'message' => $payload['message'],
+                ], 401)
+                ->withHeaders($this->corsHeaders($request));
+        }
+
+        return response()->json($payload, 401)->withHeaders($this->corsHeaders($request));
+    }
+
+    private function shouldRenderHtmlUnauthorized(Request $request): bool
+    {
+        if (! $request->isMethod('GET')) {
+            return false;
+        }
+
+        if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
+            return false;
+        }
+
+        $accept = strtolower((string) $request->header('Accept', ''));
+
+        return str_contains($accept, 'text/html') || $accept === '' || str_contains($accept, '*/*');
     }
 
     private function corsHeaders(Request $request): array
@@ -118,7 +147,10 @@ class ExambroApiKey
 
     private function isUserAgentDetectionEnabled(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_user_agent_detection_enabled', 1);
+        $raw = $this->readExambroSetting(
+            'user_agent_detection_enabled',
+            $this->readPersistedSetting('exambro_user_agent_detection_enabled', 1)
+        );
 
         if (is_bool($raw)) {
             return $raw;
@@ -137,7 +169,10 @@ class ExambroApiKey
 
     private function getUserAgentPatterns(): array
     {
-        $stored = (string) $this->readPersistedSetting('exambro_user_agent_patterns', "exambro\nsafeexambrowser\nseb");
+        $stored = (string) $this->readExambroSetting(
+            'user_agent_patterns',
+            (string) $this->readPersistedSetting('exambro_user_agent_patterns', "exambro\nsafeexambrowser\nseb")
+        );
         $parts = preg_split('/[\r\n,]+/', $stored) ?: [];
         $normalized = [];
 
@@ -224,6 +259,15 @@ class ExambroApiKey
 
     private function logRejectedRequest(Request $request, int $statusCode, string $reason): void
     {
+        $ip = (string) $request->ip();
+        $host = strtolower((string) $request->getHost());
+        $path = strtolower(trim((string) $request->path(), '/'));
+        $throttleKey = 'exambro_reject_log:' . sha1($host . '|' . $path . '|' . $reason . '|' . $ip);
+
+        if (! Cache::add($throttleKey, 1, now()->addSeconds(self::REJECT_LOG_TTL_SECONDS))) {
+            return;
+        }
+
         try {
             Log::warning('Exambro middleware rejected request', [
                 'status_code' => $statusCode,
@@ -238,6 +282,46 @@ class ExambroApiKey
         } catch (\Throwable $e) {
             // Never break request flow on logging failure.
         }
+    }
+
+    private function exambroSettingsFilePath(): string
+    {
+        return storage_path('app/private/exambro-settings.json');
+    }
+
+    private function readAllExambroSettings(): array
+    {
+        $path = $this->exambroSettingsFilePath();
+
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function readExambroSetting(string $key, mixed $default = null): mixed
+    {
+        $cacheKey = 'exambro_middleware_setting:' . $key;
+        $cached = Cache::get($cacheKey, '__missing__');
+
+        if ($cached !== '__missing__') {
+            return $cached;
+        }
+
+        $settings = $this->readAllExambroSettings();
+
+        if (! array_key_exists($key, $settings)) {
+            return $default;
+        }
+
+        $value = $settings[$key];
+        Cache::put($cacheKey, $value, now()->addMinutes(5));
+
+        return $value;
     }
 
     private function isTrustedExambroPwaNavigation(Request $request): bool

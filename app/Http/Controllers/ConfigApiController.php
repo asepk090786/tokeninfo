@@ -5,6 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ConfigApiController extends Controller
 {
@@ -14,14 +18,18 @@ class ConfigApiController extends Controller
      */
     public function getVersion(Request $request): Response
     {
-        $versionFile = public_path('api/version.json');
-        
-        if (!file_exists($versionFile)) {
-            return response()->json(['error' => 'Version file not found'], 404);
-        }
+        $payload = $this->fetchVersionPayloadViaAppLb($request);
 
-        $content = file_get_contents($versionFile);
-        $payload = json_decode($content, true);
+        if ($payload === null) {
+            $versionFile = public_path('api/version.json');
+
+            if (! file_exists($versionFile)) {
+                return response()->json(['error' => 'Version file not found'], 404);
+            }
+
+            $content = file_get_contents($versionFile);
+            $payload = json_decode($content, true);
+        }
 
         if (is_array($payload)) {
             $configVersion = (string) Arr::get($payload, 'config_version', '1.0.0');
@@ -42,25 +50,31 @@ class ConfigApiController extends Controller
     }
 
     /**
-     * Serve config.json dengan aggressive cache (untuk CDN)
-     * URL harus include version: /api/config.json?v=1.0.0
-     * Sehingga CDN bisa cache berbulan-bulan tanpa invalidate
+        * Serve config.json untuk Exambro sync flow.
+        * - URL versioned (?v=...) => cache panjang
+        * - URL tanpa version   => no-cache (lebih aman untuk fallback client)
      */
     public function getConfig(Request $request): Response
     {
-        $configFile = public_path('api/config.json');
-        
-        if (!file_exists($configFile)) {
-            return response()->json(['error' => 'Config file not found'], 404);
-        }
+        $payload = $this->fetchConfigPayloadViaAppLb($request);
 
-        $content = file_get_contents($configFile);
-        $payload = json_decode($content, true);
+        if ($payload === null) {
+            $configFile = public_path('api/config.json');
+
+            if (! file_exists($configFile)) {
+                return response()->json(['error' => 'Config file not found'], 404);
+            }
+
+            $content = file_get_contents($configFile);
+            $payload = json_decode($content, true);
+        }
 
         if (is_array($payload)) {
             $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
             $payload['base_url'] = $baseUrl;
             $payload['exambro_page_url'] = $baseUrl . '/exambro';
+            $payload['load_balancing_url'] = $baseUrl . '/go-cbt';
+            $payload['mirror_list_url'] = $baseUrl . '/api/mirror_list.json';
             $content = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
@@ -72,10 +86,14 @@ class ConfigApiController extends Controller
                 ->header('ETag', $etag);
         }
 
+        $requestedVersion = trim((string) $request->query('v', ''));
+        $cacheControl = $requestedVersion !== ''
+            ? 'public, max-age=31536000, immutable'
+            : 'no-cache, must-revalidate, max-age=0';
+
         return response($content, 200)
             ->header('Content-Type', 'application/json; charset=utf-8')
-            // Aggressive cache (1 tahun) - aman karena URL include versi
-            ->header('Cache-Control', 'public, max-age=31536000, immutable')
+            ->header('Cache-Control', $cacheControl)
             ->header('ETag', $etag)
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('Access-Control-Allow-Origin', '*')
@@ -142,5 +160,157 @@ class ConfigApiController extends Controller
             'server' => $request->getHost(),
         ])
         ->header('Cache-Control', 'no-cache, must-revalidate');
+    }
+
+    private function fetchVersionPayloadViaAppLb(Request $request): ?array
+    {
+        $cacheKey = 'config_api_lb:version_payload';
+
+        return Cache::remember($cacheKey, now()->addSeconds(5), function () use ($request) {
+            $nodeBase = $this->selectNextNodeBaseUrl($request);
+            if ($nodeBase === null) {
+                return null;
+            }
+
+            try {
+                $response = Http::connectTimeout(1)
+                    ->timeout(2)
+                    ->withHeaders(['Accept' => 'application/json'])
+                    ->get(rtrim($nodeBase, '/') . '/api/version.json', [
+                        '_lb' => '1',
+                        '_t' => now()->timestamp,
+                    ]);
+
+                if (! $response->successful()) {
+                    return null;
+                }
+
+                $payload = $response->json();
+
+                return is_array($payload) ? $payload : null;
+            } catch (\Throwable $e) {
+                Log::warning('Failed to fetch version via app LB.', [
+                    'node' => $nodeBase,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return null;
+            }
+        });
+    }
+
+    private function fetchConfigPayloadViaAppLb(Request $request): ?array
+    {
+        $versionTag = trim((string) $request->query('v', 'no-version'));
+        $cacheKey = 'config_api_lb:config_payload:' . sha1($versionTag);
+
+        return Cache::remember($cacheKey, now()->addSeconds(15), function () use ($request) {
+            $nodeBase = $this->selectNextNodeBaseUrl($request);
+            if ($nodeBase === null) {
+                return null;
+            }
+
+            try {
+                $query = ['_lb' => '1'];
+                $requestedVersion = trim((string) $request->query('v', ''));
+                if ($requestedVersion !== '') {
+                    $query['v'] = $requestedVersion;
+                }
+
+                $response = Http::connectTimeout(1)
+                    ->timeout(2)
+                    ->withHeaders(['Accept' => 'application/json'])
+                    ->get(rtrim($nodeBase, '/') . '/api/config.json', $query);
+
+                if (! $response->successful()) {
+                    return null;
+                }
+
+                $payload = $response->json();
+
+                return is_array($payload) ? $payload : null;
+            } catch (\Throwable $e) {
+                Log::warning('Failed to fetch config via app LB.', [
+                    'node' => $nodeBase,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return null;
+            }
+        });
+    }
+
+    private function selectNextNodeBaseUrl(Request $request): ?string
+    {
+        if ($request->query('_lb') === '1') {
+            return null;
+        }
+
+        $nodes = $this->configuredLbNodes($request);
+        if (count($nodes) === 0) {
+            return null;
+        }
+
+        $indexKey = 'config_api_lb:round_robin_index';
+        $index = (int) Cache::get($indexKey, -1);
+        $next = ($index + 1) % count($nodes);
+        Cache::put($indexKey, $next, now()->addHours(12));
+
+        return $nodes[$next] ?? null;
+    }
+
+    private function configuredLbNodes(Request $request): array
+    {
+        $cacheKey = 'config_api_lb:node_list';
+
+        return Cache::remember($cacheKey, now()->addSeconds(30), function () use ($request) {
+            try {
+                $row = DB::table('web_settings')
+                    ->where('setting_key', 'cbt_servers_list')
+                    ->first(['setting_value']);
+            } catch (\Throwable $e) {
+                return [];
+            }
+
+            if (! $row || ! isset($row->setting_value)) {
+                return [];
+            }
+
+            $decoded = json_decode((string) $row->setting_value, true);
+            if (! is_array($decoded)) {
+                return [];
+            }
+
+            $currentHost = strtolower((string) $request->getHost());
+            $nodes = [];
+
+            foreach ($decoded as $server) {
+                if (! is_array($server)) {
+                    continue;
+                }
+
+                $url = trim((string) ($server['url'] ?? ''));
+                if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                    continue;
+                }
+
+                if (((bool) ($server['hidden'] ?? false)) === true) {
+                    continue;
+                }
+
+                if (((bool) ($server['lb_enabled'] ?? true)) !== true) {
+                    continue;
+                }
+
+                $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+                if ($host === '' || $host === $currentHost) {
+                    continue;
+                }
+
+                $nodes[$host] = rtrim($url, '/');
+            }
+
+            return array_values($nodes);
+        });
     }
 }
