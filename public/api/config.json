@@ -1,8 +1,18 @@
 {
+  "version": "1.0.1",
   "school_name": "SMA NEGERI 1 PONTANG",
+  "app_name": "CBT Garuda",
+  "exambro_page_url": "https://cbt.sman1-pontang.sch.id/exambro",
+  "warning_audio_enabled": true,
+  "exam_rotation_mode": "auto",
   "status_server": true,
-  "status_pin": false,
-  "status_token": false,
-  "exambro_page_url": "https://link-ujian.com/exambro"
+  "status_pin": true,
+  "status_token": true,
+  "api_endpoints": {
+    "exambro_info": "https://cbt.sman1-pontang.sch.id/api/exambro-info",
+    "status_token": "https://cbt.sman1-pontang.sch.id/api/exambro-status/token",
+    "status_warning": "https://cbt.sman1-pontang.sch.id/api/exambro-status/peringatan",
+    "config_download": "https://cbt.sman1-pontang.sch.id/assets/app/config.json"
+  }
 }
 

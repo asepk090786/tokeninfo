@@ -46,9 +46,13 @@ Route::match(['POST', 'OPTIONS'], '/api/internal/version-sync', [CbtInfoControll
 Route::match(['GET', 'OPTIONS'], '/api/version.json', [ConfigApiController::class, 'getVersion'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('config.version');
+Route::match(['GET', 'OPTIONS'], '/assets/app/version.json', [ConfigApiController::class, 'getVersion'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 Route::match(['GET', 'OPTIONS'], '/api/config.json', [ConfigApiController::class, 'getConfig'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('config.file');
+Route::match(['GET', 'OPTIONS'], '/assets/app/config.json', [ConfigApiController::class, 'getConfig'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 Route::match(['GET', 'OPTIONS'], '/api/config/health', [ConfigApiController::class, 'health'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('config.health');

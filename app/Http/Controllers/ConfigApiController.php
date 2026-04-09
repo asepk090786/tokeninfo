@@ -33,8 +33,9 @@ class ConfigApiController extends Controller
 
         if (is_array($payload)) {
             $configVersion = (string) Arr::get($payload, 'config_version', '1.0.0');
-            $payload['config_url'] = $request->getSchemeAndHttpHost() . '/api/config.json';
-            $payload['config_url_versioned'] = $request->getSchemeAndHttpHost() . '/api/config.json?v=' . rawurlencode($configVersion);
+            $configBase = $this->resolveConfigBasePath($request);
+            $payload['config_url'] = $request->getSchemeAndHttpHost() . $configBase . '/config.json';
+            $payload['config_url_versioned'] = $request->getSchemeAndHttpHost() . $configBase . '/config.json?v=' . rawurlencode($configVersion);
             $content = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
         
@@ -160,6 +161,17 @@ class ConfigApiController extends Controller
             'server' => $request->getHost(),
         ])
         ->header('Cache-Control', 'no-cache, must-revalidate');
+    }
+
+    private function resolveConfigBasePath(Request $request): string
+    {
+        $path = '/' . ltrim((string) $request->path(), '/');
+
+        if (str_starts_with($path, '/assets/app')) {
+            return '/assets/app';
+        }
+
+        return '/api';
     }
 
     private function fetchVersionPayloadViaAppLb(Request $request): ?array
