@@ -484,7 +484,7 @@ class CbtInfoController extends Controller
         $exambroToken        = $this->getExambroToken();
         $exambroTokenSource  = $this->getExambroTokenSource();
         $exambroEmergencyExitPin = $this->getExambroEmergencyExitPin();
-        $exambroEmergencyExitPinSource = $this->hasPersistedExambroEmergencyExitPin() ? 'database' : 'env';
+        $exambroEmergencyExitPinSource = $this->hasPersistedExambroEmergencyExitPin() ? 'file' : 'env';
         $userAgentDetectionEnabled = $this->isUserAgentDetectionEnabled();
         $userAgentPatterns = $this->getExambroUserAgentPatternsAsText();
         $loadBalancerMirrorCount = $this->countEligibleLoadBalancerServers($servers);
@@ -529,8 +529,8 @@ class CbtInfoController extends Controller
                 ->withErrors(['user_agent_patterns' => 'Daftar keyword User-Agent tidak boleh kosong.']);
         }
 
-        $this->writePersistedSetting('exambro_user_agent_detection_enabled', $enabled ? 1 : 0);
-        $this->writePersistedSetting('exambro_user_agent_patterns', implode("\n", $patterns));
+        $this->writeExambroSetting('user_agent_detection_enabled', $enabled ? 1 : 0);
+        $this->writeExambroSetting('user_agent_patterns', implode("\n", $patterns));
 
         return redirect('/admin/cbt-info#panel-user-agent')
             ->with('status', 'Pengaturan User-Agent berhasil diperbarui.');
@@ -547,7 +547,7 @@ class CbtInfoController extends Controller
         ]);
 
         $pin = trim((string) $validated['exambro_exit_emergency_pin']);
-        $this->writePersistedSetting('exambro_exit_emergency_pin', $pin);
+        $this->writeExambroSetting('exit_emergency_pin', $pin);
 
         return redirect('/admin/cbt-info#panel-token-pin')
             ->with('status', 'PIN darurat Exit Exambro berhasil diperbarui.');
@@ -1068,7 +1068,7 @@ class CbtInfoController extends Controller
         }
 
         $currentStatus = $this->isExambroActive();
-        $this->writePersistedSetting('exambro_token_active', ! $currentStatus);
+        $this->writeExambroSetting('token_active', ! $currentStatus);
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
@@ -1110,7 +1110,7 @@ class CbtInfoController extends Controller
         $currentValue = $this->getExambroWarningValue();
         $nextValue = $currentValue === 1 ? 0 : 1;
 
-        $this->writePersistedSetting('exambro_warning_active', $nextValue);
+        $this->writeExambroSetting('warning_active', $nextValue);
 
         return redirect()->route('cbt.admin')->with('status', 'Pengaturan peringatan Exambro diubah menjadi ' . ($nextValue === 1 ? 'ON (1)' : 'OFF (0)') . '.');
     }
@@ -1124,7 +1124,7 @@ class CbtInfoController extends Controller
         $currentValue = $this->isExambroTokenVisibleOnPage();
         $nextValue = $currentValue ? 0 : 1;
 
-        $this->writePersistedSetting('exambro_show_pin_on_page', $nextValue);
+        $this->writeExambroSetting('show_pin_on_page', $nextValue);
 
         return redirect()->route('cbt.admin')->with('status', 'Tampilan PIN Exambro di halaman Exambro diubah menjadi ' . ($nextValue === 1 ? 'TAMPIL' : 'SEMBUNYI') . '.');
     }
@@ -1136,7 +1136,7 @@ class CbtInfoController extends Controller
         }
 
         $currentStatus = $this->isExambroPinActive();
-        $this->writePersistedSetting('exambro_pin_active', ! $currentStatus);
+        $this->writeExambroSetting('pin_active', ! $currentStatus);
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
@@ -1214,7 +1214,7 @@ class CbtInfoController extends Controller
 
     private function isExambroActive(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_token_active', false);
+        $raw = $this->readExambroSetting('token_active', false);
 
         if (is_bool($raw)) {
             return $raw;
@@ -1235,7 +1235,7 @@ class CbtInfoController extends Controller
 
     private function isExambroPinActive(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_pin_active', true);
+        $raw = $this->readExambroSetting('pin_active', true);
 
         if (is_bool($raw)) {
             return $raw;
@@ -1256,7 +1256,7 @@ class CbtInfoController extends Controller
 
     private function getExambroEmergencyExitPin(): string
     {
-        $persisted = trim((string) $this->readPersistedSetting('exambro_exit_emergency_pin', ''));
+        $persisted = trim((string) $this->readExambroSetting('exit_emergency_pin', ''));
         if ($persisted !== '') {
             return $persisted;
         }
@@ -1271,19 +1271,19 @@ class CbtInfoController extends Controller
 
     private function hasPersistedExambroEmergencyExitPin(): bool
     {
-        return trim((string) $this->readPersistedSetting('exambro_exit_emergency_pin', '')) !== '';
+        return trim((string) $this->readExambroSetting('exit_emergency_pin', '')) !== '';
     }
 
     private function getExambroToken(): string
     {
-        $persistedToken = strtoupper(trim((string) $this->readPersistedSetting('exambro_token', '')));
+        $persistedToken = strtoupper(trim((string) $this->readExambroSetting('token', '')));
         if ($persistedToken !== '') {
             return $persistedToken;
         }
 
         $fileToken = $this->readExambroTokenFromFile();
         if ($fileToken !== '') {
-            $this->writePersistedSetting('exambro_token', $fileToken);
+            $this->writeExambroSetting('token', $fileToken);
 
             return $fileToken;
         }
@@ -1293,8 +1293,8 @@ class CbtInfoController extends Controller
 
     private function getExambroTokenSource(): string
     {
-        if (trim((string) $this->readPersistedSetting('exambro_token', '')) !== '') {
-            return 'db';
+        if (trim((string) $this->readExambroSetting('token', '')) !== '') {
+            return 'file';
         }
 
         return $this->readExambroTokenFromFile() !== '' ? 'web' : 'env';
@@ -1327,7 +1327,7 @@ class CbtInfoController extends Controller
 
     private function storeExambroToken(string $token): void
     {
-        $this->writePersistedSetting('exambro_token', strtoupper(trim($token)));
+        $this->writeExambroSetting('token', strtoupper(trim($token)));
 
         $path = $this->exambroTokenFilePath();
         $directory = dirname($path);
@@ -1342,9 +1342,74 @@ class CbtInfoController extends Controller
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
+    private function exambroSettingsFilePath(): string
+    {
+        return storage_path('app/private/exambro-settings.json');
+    }
+
+    private function readAllExambroSettings(): array
+    {
+        $path = $this->exambroSettingsFilePath();
+
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function writeAllExambroSettings(array $settings): void
+    {
+        $path = $this->exambroSettingsFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        $settings['updated_at'] = now()->toIso8601String();
+        File::put($path, json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $this->cacheForgetSafely(self::CACHE_KEY_CBT_INFO);
+    }
+
+    private function readExambroSetting(string $key, mixed $default = null): mixed
+    {
+        $cacheKey = 'exambro_setting:' . $key;
+        $cached = Cache::get($cacheKey, '__missing__');
+
+        if ($cached !== '__missing__') {
+            return $cached;
+        }
+
+        $settings = $this->readAllExambroSettings();
+
+        if (! array_key_exists($key, $settings)) {
+            return $default;
+        }
+
+        $value = $settings[$key];
+        $this->cacheForeverSafely($cacheKey, $value);
+
+        return $value;
+    }
+
+    private function writeExambroSetting(string $key, mixed $value): void
+    {
+        $cacheKey = 'exambro_setting:' . $key;
+        $this->cacheForeverSafely($cacheKey, $value);
+        $this->cacheForgetSafely(self::CACHE_KEY_CBT_INFO);
+
+        $settings = $this->readAllExambroSettings();
+        $settings[$key] = $value;
+        $this->writeAllExambroSettings($settings);
+    }
+
     private function getExambroWarningValue(): int
     {
-        $raw = $this->readPersistedSetting('exambro_warning_active', 1);
+        $raw = $this->readExambroSetting('warning_active', 1);
 
         if (is_int($raw) || is_float($raw)) {
             return ((int) $raw) === 1 ? 1 : 0;
@@ -1365,7 +1430,7 @@ class CbtInfoController extends Controller
 
     private function isExambroTokenVisibleOnPage(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_show_pin_on_page', 1);
+        $raw = $this->readExambroSetting('show_pin_on_page', 1);
 
         if (is_bool($raw)) {
             return $raw;
@@ -2210,7 +2275,7 @@ class CbtInfoController extends Controller
 
     private function isUserAgentDetectionEnabled(): bool
     {
-        $raw = $this->readPersistedSetting('exambro_user_agent_detection_enabled', 1);
+        $raw = $this->readExambroSetting('user_agent_detection_enabled', 1);
 
         if (is_bool($raw)) {
             return $raw;
@@ -2229,7 +2294,7 @@ class CbtInfoController extends Controller
 
     private function getExambroUserAgentPatterns(): array
     {
-        $stored = (string) $this->readPersistedSetting('exambro_user_agent_patterns', 'exambro');
+        $stored = (string) $this->readExambroSetting('user_agent_patterns', 'exambro');
 
         return $this->normalizeUserAgentPatterns($stored);
     }
