@@ -30,13 +30,13 @@ class GitAutoUpdater
 
     public function __construct()
     {
-        $this->repoPath = rtrim((string) env('AUTO_UPDATE_REPO_PATH', base_path()), '/');
-        $this->remote = trim((string) env('AUTO_UPDATE_REMOTE', 'origin')) ?: 'origin';
-        $this->defaultBranch = trim((string) env('AUTO_UPDATE_BRANCH', 'master')) ?: 'master';
-        $this->lockTtl = max(30, (int) env('AUTO_UPDATE_LOCK_SECONDS', 300));
-        $this->enabled = filter_var((string) env('AUTO_UPDATE_ENABLED', 'false'), FILTER_VALIDATE_BOOL);
-        $this->runComposer = filter_var((string) env('AUTO_UPDATE_RUN_COMPOSER', 'false'), FILTER_VALIDATE_BOOL);
-        $this->runMigrate = filter_var((string) env('AUTO_UPDATE_RUN_MIGRATE', 'false'), FILTER_VALIDATE_BOOL);
+        $this->repoPath = rtrim((string) config('auto_update.repo_path', base_path()), '/');
+        $this->remote = trim((string) config('auto_update.remote', 'origin')) ?: 'origin';
+        $this->defaultBranch = trim((string) config('auto_update.branch', 'master')) ?: 'master';
+        $this->lockTtl = max(30, (int) config('auto_update.lock_seconds', 300));
+        $this->enabled = filter_var((string) config('auto_update.enabled', false), FILTER_VALIDATE_BOOL);
+        $this->runComposer = filter_var((string) config('auto_update.run_composer', false), FILTER_VALIDATE_BOOL);
+        $this->runMigrate = filter_var((string) config('auto_update.run_migrate', false), FILTER_VALIDATE_BOOL);
         $this->dirtyIgnorePatterns = $this->parseDirtyIgnorePatterns();
     }
 
@@ -432,8 +432,8 @@ class GitAutoUpdater
      */
     private function parseDirtyIgnorePatterns(): array
     {
-        $configured = trim((string) env(
-            'AUTO_UPDATE_IGNORE_DIRTY_PATHS',
+        $configured = trim((string) config(
+            'auto_update.ignore_dirty_paths',
             '.env,bootstrap/cache/.gitignore,storage/*.gitignore'
         ));
 
@@ -489,7 +489,7 @@ class GitAutoUpdater
 
     private function isAllowedBranch(string $branch): bool
     {
-        $allowed = trim((string) env('AUTO_UPDATE_ALLOWED_BRANCHES', '*'));
+        $allowed = trim((string) config('auto_update.allowed_branches', '*'));
         if ($allowed === '' || $allowed === '*') {
             return true;
         }

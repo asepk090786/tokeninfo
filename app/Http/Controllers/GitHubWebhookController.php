@@ -10,7 +10,7 @@ class GitHubWebhookController extends Controller
 {
     public function handle(Request $request, GitAutoUpdater $updater): JsonResponse
     {
-        $secret = trim((string) env('GITHUB_WEBHOOK_SECRET', ''));
+        $secret = trim((string) config('auto_update.webhook_secret', ''));
         if ($secret === '') {
             return response()->json([
                 'status' => 'error',
