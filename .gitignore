@@ -29,3 +29,9 @@ Thumbs.db
 # Local deployment artifacts
 /backup1.tar.gz
 /token.sman1-pontang.sch.id/
+
+# Server-specific php ini overrides
+/.user.ini
+/public/.user.ini
+/user.ini
+/public/user.ini
