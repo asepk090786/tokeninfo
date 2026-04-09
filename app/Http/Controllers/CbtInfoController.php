@@ -19,7 +19,6 @@ use ZipArchive;
 
 class CbtInfoController extends Controller
 {
-    private const LEGACY_PUBLIC_HOST = 'token.sman1-pontang.sch.id';
     private const SERVER_LOGIN_COUNTER_PREFIX = 'server_login_count:';
     private const SERVER_ACTIVE_MEMBER_PREFIX = 'server_active_member:';
     private const SERVER_ACTIVE_INDEX_PREFIX = 'server_active_index:';
@@ -1996,17 +1995,25 @@ class CbtInfoController extends Controller
     private function normalizeLegacyHealthCheckBaseUrl(string $url): string
     {
         $targetHost = strtolower((string) parse_url($url, PHP_URL_HOST));
-        if ($targetHost === '' || strcasecmp($targetHost, self::LEGACY_PUBLIC_HOST) !== 0) {
+        if ($targetHost === '') {
             return $url;
         }
 
-        $appUrl = trim((string) config('app.url', ''));
-        if ($appUrl === '' || ! filter_var($appUrl, FILTER_VALIDATE_URL)) {
+        $legacyHosts = $this->legacyPublicHosts();
+        if ($legacyHosts === [] || ! in_array($targetHost, $legacyHosts, true)) {
             return $url;
         }
 
-        $appScheme = strtolower((string) parse_url($appUrl, PHP_URL_SCHEME));
-        $appHost = strtolower((string) parse_url($appUrl, PHP_URL_HOST));
+        $currentBaseUrl = $this->resolveCurrentBaseUrl();
+        if ($currentBaseUrl === '' || ! filter_var($currentBaseUrl, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+
+        $appScheme = strtolower((string) parse_url($currentBaseUrl, PHP_URL_SCHEME));
+        $appHost = strtolower((string) parse_url($currentBaseUrl, PHP_URL_HOST));
+        $appPort = parse_url($currentBaseUrl, PHP_URL_PORT);
+        $appPortSuffix = is_int($appPort) ? ':' . $appPort : '';
+
         if ($appHost === '' || strcasecmp($appHost, $targetHost) === 0) {
             return $url;
         }
@@ -2020,7 +2027,42 @@ class CbtInfoController extends Controller
         $query = isset($parts['query']) ? '?' . (string) $parts['query'] : '';
         $fragment = isset($parts['fragment']) ? '#' . (string) $parts['fragment'] : '';
 
-        return ($appScheme !== '' ? $appScheme : 'https') . '://' . $appHost . $path . $query . $fragment;
+        return ($appScheme !== '' ? $appScheme : 'https') . '://' . $appHost . $appPortSuffix . $path . $query . $fragment;
+    }
+
+    private function legacyPublicHosts(): array
+    {
+        $raw = trim((string) env('LEGACY_PUBLIC_HOSTS', ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        $parts = preg_split('/[\r\n,]+/', $raw) ?: [];
+        $hosts = [];
+
+        foreach ($parts as $part) {
+            $host = strtolower(trim((string) $part));
+            if ($host !== '') {
+                $hosts[$host] = $host;
+            }
+        }
+
+        return array_values($hosts);
+    }
+
+    private function resolveCurrentBaseUrl(): string
+    {
+        $request = request();
+        if ($request instanceof Request) {
+            $host = trim((string) $request->getHost());
+            if ($host !== '') {
+                return $request->getSchemeAndHttpHost();
+            }
+        }
+
+        $appUrl = trim((string) config('app.url', ''));
+
+        return $appUrl;
     }
 
     private function serverLoginCacheKey(string $serverKey): string

@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
-  "base_url": "https://token.sman1pontang.biz.id",
-  "exambro_page_url": "https://token.sman1pontang.biz.id/exambro",
-  "load_balancing_url": "https://token.sman1pontang.biz.id/go-cbt",
-  "mirror_list_url": "https://token.sman1pontang.biz.id/api/mirror_list.json",
+  "base_url": "",
+  "exambro_page_url": "/exambro",
+  "load_balancing_url": "/go-cbt",
+  "mirror_list_url": "/api/mirror_list.json",
   "load_balancing_source": "mirror_list.json",
   "school_name": "SMA Negeri 1 Pontang",
   "app_name": "CBT Garuda",
