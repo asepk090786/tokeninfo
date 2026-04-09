@@ -488,6 +488,10 @@ class CbtInfoController extends Controller
         $loadBalancerMirrorCount = $this->countEligibleLoadBalancerServers($servers);
         $loadBalancerLinkAvailable = $loadBalancerMirrorCount > 1;
         $mirrorListUrl = url('api/mirror_list.json');
+        $versionSyncSettings = $this->getVersionSyncSettings();
+        $versionSyncTargets = $this->collectVersionSyncTargets($servers);
+        $versionData = $this->readVersionPayloadFromFile();
+        $currentConfigVersion = trim((string) ($versionData['config_version'] ?? ''));
 
         return view('cbt-info.admin', compact(
             'info',
@@ -505,8 +509,163 @@ class CbtInfoController extends Controller
             'exambroPinActive',
             'loadBalancerMirrorCount',
             'loadBalancerLinkAvailable',
-            'mirrorListUrl'
+            'mirrorListUrl',
+            'versionSyncSettings',
+            'versionSyncTargets',
+            'currentConfigVersion'
         ));
+    }
+
+    public function updateVersionSyncSettings(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'version_sync_enabled' => ['nullable', 'in:0,1'],
+            'version_sync_key' => ['nullable', 'string', 'min:16', 'max:128', 'regex:/^[A-Za-z0-9_\-]+$/'],
+            'version_sync_timeout_seconds' => ['nullable', 'integer', 'min:1', 'max:5'],
+        ]);
+
+        $enabled = (($validated['version_sync_enabled'] ?? '0') === '1');
+        $syncKey = trim((string) ($validated['version_sync_key'] ?? ''));
+        $timeoutSeconds = (int) ($validated['version_sync_timeout_seconds'] ?? 2);
+
+        $this->writePersistedSetting('version_sync_enabled', $enabled ? 1 : 0);
+        $this->writePersistedSetting('version_sync_key', $syncKey);
+        $this->writePersistedSetting('version_sync_timeout_seconds', max(1, min($timeoutSeconds, 5)));
+
+        return redirect('/admin/cbt-info#panel-version-sync')
+            ->with('status', 'Pengaturan sinkronisasi version.json berhasil diperbarui.');
+    }
+
+    public function syncVersionNow(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $settings = $this->getVersionSyncSettings();
+        if (! $settings['enabled']) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'Sinkronisasi belum diaktifkan. Aktifkan dulu pada panel Version Sync.']);
+        }
+
+        if ($settings['key'] === '') {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'Sync Key kosong. Isi Sync Key terlebih dahulu.']);
+        }
+
+        $payload = $this->readVersionPayloadFromFile();
+        if ($payload === []) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'File version.json tidak valid atau tidak ditemukan.']);
+        }
+
+        $servers = $this->buildServerList($this->getInfoFromGarudaCbt(), true);
+        $targets = $this->collectVersionSyncTargets($servers);
+
+        if ($targets === []) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->withErrors(['version_sync' => 'Tidak ada target mirror valid untuk sinkronisasi.']);
+        }
+
+        $successCount = 0;
+        $failedHosts = [];
+
+        foreach ($targets as $target) {
+            $endpoint = (string) ($target['sync_endpoint'] ?? '');
+            $host = (string) ($target['host'] ?? 'unknown-host');
+
+            if ($endpoint === '' || ! filter_var($endpoint, FILTER_VALIDATE_URL)) {
+                $failedHosts[] = $host;
+                continue;
+            }
+
+            try {
+                $response = Http::connectTimeout($settings['timeout_seconds'])
+                    ->timeout($settings['timeout_seconds'])
+                    ->withHeaders([
+                        'X-Version-Sync-Key' => $settings['key'],
+                        'Accept' => 'application/json',
+                    ])
+                    ->post($endpoint, [
+                        'version' => $payload,
+                        'source_host' => request()->getHost(),
+                        'synced_at' => now()->toIso8601String(),
+                    ]);
+
+                if ($response->successful()) {
+                    $successCount++;
+                } else {
+                    $failedHosts[] = $host;
+                }
+            } catch (\Throwable $e) {
+                $failedHosts[] = $host;
+            }
+        }
+
+        $targetCount = count($targets);
+        if ($successCount === $targetCount) {
+            return redirect('/admin/cbt-info#panel-version-sync')
+                ->with('status', "Sinkronisasi version.json berhasil ke {$successCount}/{$targetCount} mirror.");
+        }
+
+        $failedLabel = implode(', ', array_slice($failedHosts, 0, 5));
+
+        return redirect('/admin/cbt-info#panel-version-sync')
+            ->withErrors([
+                'version_sync' => "Sinkronisasi parsial: berhasil {$successCount}/{$targetCount}. Gagal: {$failedLabel}",
+            ]);
+    }
+
+    public function receiveVersionSync(Request $request)
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204)->withHeaders($this->corsHeaders($request));
+        }
+
+        $settings = $this->getVersionSyncSettings();
+        $configuredKey = $settings['key'];
+        $providedKey = trim((string) $request->header('X-Version-Sync-Key', ''));
+
+        if ($configuredKey === '' || $providedKey === '' || ! hash_equals($configuredKey, $providedKey)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid sync key.',
+            ], 401)->withHeaders($this->corsHeaders($request));
+        }
+
+        $version = $request->input('version');
+        if (! is_array($version)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid version payload.',
+            ], 422)->withHeaders($this->corsHeaders($request));
+        }
+
+        $configVersion = trim((string) ($version['config_version'] ?? ''));
+        if ($configVersion === '') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'config_version is required.',
+            ], 422)->withHeaders($this->corsHeaders($request));
+        }
+
+        $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
+        $version['config_url'] = $baseUrl . '/api/config.json';
+        $version['config_url_versioned'] = $baseUrl . '/api/config.json?v=' . rawurlencode($configVersion);
+        $version['last_updated'] = now()->toIso8601String();
+        $version['timestamp'] = now()->timestamp * 1000;
+
+        $this->writeVersionPayloadToFile($version);
+
+        return response()->json([
+            'status' => 'ok',
+            'config_version' => $configVersion,
+            'synced_at' => now()->toIso8601String(),
+        ])->withHeaders($this->corsHeaders($request));
     }
 
     public function updateUserAgentSettings(Request $request)
@@ -2555,6 +2714,100 @@ class CbtInfoController extends Controller
     private function mirrorListFilePath(): string
     {
         return storage_path('app/private/mirror_list.json');
+    }
+
+    private function versionFilePath(): string
+    {
+        return public_path('api/version.json');
+    }
+
+    private function readVersionPayloadFromFile(): array
+    {
+        $path = $this->versionFilePath();
+        if (! File::exists($path)) {
+            return [];
+        }
+
+        $raw = File::get($path);
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function writeVersionPayloadToFile(array $payload): void
+    {
+        $path = $this->versionFilePath();
+        $directory = dirname($path);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        File::put($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function getVersionSyncSettings(): array
+    {
+        $enabledRaw = $this->readPersistedSetting('version_sync_enabled', 0);
+        $key = trim((string) $this->readPersistedSetting('version_sync_key', ''));
+        $timeout = (int) $this->readPersistedSetting('version_sync_timeout_seconds', 2);
+
+        return [
+            'enabled' => $this->truthy($enabledRaw),
+            'key' => $key,
+            'timeout_seconds' => max(1, min($timeout, 5)),
+        ];
+    }
+
+    private function collectVersionSyncTargets(array $servers): array
+    {
+        $request = request();
+        $currentHost = $request instanceof Request ? strtolower((string) $request->getHost()) : '';
+        $targets = [];
+
+        foreach ($servers as $server) {
+            if (! is_array($server)) {
+                continue;
+            }
+
+            $url = trim((string) ($server['url'] ?? ''));
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+            if ($host === '' || ($currentHost !== '' && strcasecmp($host, $currentHost) === 0)) {
+                continue;
+            }
+
+            $baseUrl = rtrim($url, '/');
+
+            $targets[$host] = [
+                'host' => $host,
+                'name' => trim((string) ($server['name'] ?? $host)) ?: $host,
+                'base_url' => $baseUrl,
+                'sync_endpoint' => $baseUrl . '/api/internal/version-sync',
+            ];
+        }
+
+        return array_values($targets);
+    }
+
+    private function truthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return ((int) $value) === 1;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on', 'active', 'aktif'], true);
+        }
+
+        return false;
     }
 
     private function readMirrorListFromFile(): array

@@ -972,6 +972,10 @@
                     Pengaturan User-Agent
                     <small>Deteksi Exambro berdasarkan User-Agent client</small>
                 </button>
+                <button class="menu-btn" data-target="panel-version-sync" type="button">
+                    Sinkronisasi Version
+                    <small>Sinkron ringan version.json ke semua mirror lewat panel admin</small>
+                </button>
             </nav>
 
             <div class="sidebar-actions">
@@ -1082,7 +1086,7 @@
                     <h4>PIN Exambro Aktif</h4>
                     <p>
                         Sumber PIN:
-                        {{ $exambroTokenSource === 'db' ? 'database' : ($exambroTokenSource === 'web' ? 'web/server file' : '.env') }}
+                        {{ $exambroTokenSource === 'file' ? 'file server' : ($exambroTokenSource === 'web' ? 'web/server file' : '.env') }}
                     </p>
                     <div class="field">
                         <label for="exambro-token">PIN Exambro</label>
@@ -1099,7 +1103,7 @@
 
                 <article class="card" style="margin-top: 12px;">
                     <h4>PIN Darurat Exit Exambro</h4>
-                    <p>PIN ini khusus untuk emergency exit di aplikasi Neo_Exam. Sumber saat ini: {{ $exambroEmergencyExitPinSource === 'database' ? 'database' : '.env' }}.</p>
+                    <p>PIN ini khusus untuk emergency exit di aplikasi Neo_Exam. Sumber saat ini: {{ $exambroEmergencyExitPinSource === 'file' ? 'file server' : '.env' }}.</p>
                     <form action="{{ route('cbt.exambro.exit-emergency-pin.update') }}" method="post">
                         @csrf
                         <div class="field">
@@ -1495,6 +1499,89 @@
 
                         <div class="btn-row">
                             <button class="btn-primary" type="submit">Simpan Pengaturan User-Agent</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+
+            <section id="panel-version-sync" class="panel">
+                <h3>Sinkronisasi Version.json</h3>
+                <p class="panel-desc">Sinkron ringan tanpa CLI: daftar target otomatis mengikuti mirror server pada panel WEB.</p>
+
+                <article class="card" style="margin-top: 12px;">
+                    <h4>Status Sinkronisasi</h4>
+                    <div class="grid" style="margin-top: 12px;">
+                        <div class="field">
+                            <label>Status Fitur</label>
+                            <input type="text" value="{{ $versionSyncSettings['enabled'] ? 'AKTIF' : 'NONAKTIF' }}" readonly>
+                        </div>
+                        <div class="field">
+                            <label>Versi Saat Ini</label>
+                            <input type="text" value="{{ $currentConfigVersion !== '' ? $currentConfigVersion : 'Belum ada' }}" readonly>
+                        </div>
+                        <div class="field">
+                            <label>Jumlah Target Mirror</label>
+                            <input type="text" value="{{ count($versionSyncTargets) }} target" readonly>
+                        </div>
+                        <div class="field">
+                            <label>Timeout Request Sinkron</label>
+                            <input type="text" value="{{ $versionSyncSettings['timeout_seconds'] }} detik" readonly>
+                        </div>
+                    </div>
+
+                    <div class="field" style="margin-top: 10px;">
+                        <label>Daftar Target Sinkron</label>
+                        <textarea readonly>@if (count($versionSyncTargets) === 0)Tidak ada target mirror valid.@else@foreach($versionSyncTargets as $target)- {{ $target['name'] }} ({{ $target['host'] }})
+{{ $target['sync_endpoint'] }}
+@endforeach@endif</textarea>
+                    </div>
+                </article>
+
+                <article class="card" style="margin-top: 12px;">
+                    <h4>Pengaturan Sinkron</h4>
+                    <form action="{{ route('cbt.version.sync.settings.update') }}" method="post">
+                        @csrf
+                        <div class="field" style="display: flex; align-items: center; gap: 10px;">
+                            <input id="version_sync_enabled" name="version_sync_enabled" type="checkbox" value="1" {{ $versionSyncSettings['enabled'] ? 'checked' : '' }} style="width: auto;">
+                            <label for="version_sync_enabled" style="margin: 0;">Aktifkan sinkronisasi otomatis version.json ke mirror server</label>
+                        </div>
+
+                        <div class="field">
+                            <label for="version_sync_key">Sync Key Antar Server (min 16 karakter)</label>
+                            <input
+                                id="version_sync_key"
+                                name="version_sync_key"
+                                type="text"
+                                maxlength="128"
+                                pattern="[A-Za-z0-9_-]{16,128}"
+                                value="{{ old('version_sync_key', $versionSyncSettings['key']) }}"
+                                placeholder="Contoh: SYNC_KEY_2026_SERVER_CLUSTER"
+                                required
+                            >
+                        </div>
+
+                        <div class="field">
+                            <label for="version_sync_timeout_seconds">Timeout Request (1-5 detik)</label>
+                            <input
+                                id="version_sync_timeout_seconds"
+                                name="version_sync_timeout_seconds"
+                                type="number"
+                                min="1"
+                                max="5"
+                                value="{{ old('version_sync_timeout_seconds', $versionSyncSettings['timeout_seconds']) }}"
+                                required
+                            >
+                        </div>
+
+                        <div class="btn-row">
+                            <button class="btn-primary" type="submit">Simpan Pengaturan Sinkron</button>
+                        </div>
+                    </form>
+
+                    <form action="{{ route('cbt.version.sync.now') }}" method="post" style="margin-top: 10px;">
+                        @csrf
+                        <div class="btn-row">
+                            <button class="btn-soft" type="submit">Sinkronkan Sekarang ke Semua Mirror</button>
                         </div>
                     </form>
                 </article>

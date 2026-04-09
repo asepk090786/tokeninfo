@@ -31,6 +31,9 @@ Route::match(['GET', 'OPTIONS'], '/api/exambro-token-status', [CbtInfoController
 Route::match(['POST', 'OPTIONS'], '/api/server-presence/heartbeat', [CbtInfoController::class, 'heartbeatServerPresence'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('cbt.server.presence.heartbeat');
+Route::match(['POST', 'OPTIONS'], '/api/internal/version-sync', [CbtInfoController::class, 'receiveVersionSync'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('cbt.version.sync.receive');
 
 // Public config endpoints for Exambro client sync flow:
 // 1) always fetch version.json (no-cache)
@@ -66,6 +69,8 @@ Route::post('/admin/exambro-token-visibility-toggle', [CbtInfoController::class,
 Route::post('/admin/exambro-pin-toggle', [CbtInfoController::class, 'toggleExambroPinStatus'])->name('cbt.exambro.pin.toggle');
 Route::get('/admin/neo-exam/download-zip', [CbtInfoController::class, 'downloadNeoExamZip'])->name('cbt.neo-exam.zip.download');
 Route::post('/admin/user-agent-settings', [CbtInfoController::class, 'updateUserAgentSettings'])->name('cbt.user-agent.update');
+Route::post('/admin/version-sync-settings', [CbtInfoController::class, 'updateVersionSyncSettings'])->name('cbt.version.sync.settings.update');
+Route::post('/admin/version-sync-now', [CbtInfoController::class, 'syncVersionNow'])->name('cbt.version.sync.now');
 Route::post('/admin/server', [CbtInfoController::class, 'addServer'])->name('cbt.server.add');
 Route::post('/admin/server/{key}', [CbtInfoController::class, 'updateServerSettings'])->name('cbt.server.update');
 Route::post('/admin/server/{key}/visibility-toggle', [CbtInfoController::class, 'toggleServerVisibility'])->name('cbt.server.visibility.toggle');
