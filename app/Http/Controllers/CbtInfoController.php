@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use ZipArchive;
@@ -2701,7 +2702,7 @@ class CbtInfoController extends Controller
         $decoded = json_decode((string) $row->setting_value, true);
         $value = json_last_error() === JSON_ERROR_NONE ? $decoded : $row->setting_value;
 
-        Cache::forever($cacheKey, $value);
+        $this->cacheForeverSafely($cacheKey, $value);
 
         return $value;
     }
@@ -2709,9 +2710,9 @@ class CbtInfoController extends Controller
     private function writePersistedSetting(string $key, mixed $value): void
     {
         $cacheKey = 'web_setting:' . $key;
-        Cache::forever($cacheKey, $value);
-        Cache::forever($key, $value);
-        Cache::forget(self::CACHE_KEY_CBT_INFO);
+        $this->cacheForeverSafely($cacheKey, $value);
+        $this->cacheForeverSafely($key, $value);
+        $this->cacheForgetSafely(self::CACHE_KEY_CBT_INFO);
 
         if (! $this->ensureWebSettingsTable()) {
             return;
@@ -2733,6 +2734,51 @@ class CbtInfoController extends Controller
             ['setting_key' => $key],
             $payload
         );
+    }
+
+    private function cacheForeverSafely(string $key, mixed $value): void
+    {
+        $this->prepareFileCacheDirectory($key);
+
+        try {
+            Cache::forever($key, $value);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to persist cache entry.', [
+                'cache_key' => $key,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function cacheForgetSafely(string $key): void
+    {
+        try {
+            Cache::forget($key);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to forget cache entry.', [
+                'cache_key' => $key,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function prepareFileCacheDirectory(string $key): void
+    {
+        if ((string) config('cache.default') !== 'file') {
+            return;
+        }
+
+        $basePath = (string) config('cache.stores.file.path', '');
+        if ($basePath === '') {
+            return;
+        }
+
+        $hash = sha1($key);
+        $directory = $basePath . '/' . substr($hash, 0, 2) . '/' . substr($hash, 2, 2);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true, true);
+        }
     }
 
     private function matchesExambroUserAgent(?string $userAgent): bool

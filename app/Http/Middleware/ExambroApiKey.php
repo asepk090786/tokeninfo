@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -55,13 +56,39 @@ class ExambroApiKey
 
         $this->logRejectedRequest($request, 401, 'user_agent_not_allowed');
 
-        return response()->json([
+        $payload = [
             'status'  => 'error',
             'message' => 'Unauthorized. Akses hanya untuk aplikasi Exambro yang valid.',
             'app_name' => $appName,
             'application_name' => $appName,
             'nama_aplikasi' => $appName,
-        ], 401)->withHeaders($this->corsHeaders($request));
+        ];
+
+        if ($this->shouldRenderHtmlUnauthorized($request)) {
+            return response()
+                ->view('cbt-info.exambro-unauthorized', [
+                    'appName' => $appName,
+                    'message' => $payload['message'],
+                ], 401)
+                ->withHeaders($this->corsHeaders($request));
+        }
+
+        return response()->json($payload, 401)->withHeaders($this->corsHeaders($request));
+    }
+
+    private function shouldRenderHtmlUnauthorized(Request $request): bool
+    {
+        if (! $request->isMethod('GET')) {
+            return false;
+        }
+
+        if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
+            return false;
+        }
+
+        $accept = strtolower((string) $request->header('Accept', ''));
+
+        return str_contains($accept, 'text/html') || $accept === '' || str_contains($accept, '*/*');
     }
 
     private function corsHeaders(Request $request): array

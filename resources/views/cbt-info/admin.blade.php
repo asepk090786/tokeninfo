@@ -379,12 +379,13 @@
             }
         }
 
-        /* ===== Server Config Dark Cards ===== */
+        /* ===== Server Config Modern Cards ===== */
         .svr-section {
             margin-top: 16px;
-            background: #111827;
+            background: linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%);
+            border: 1px solid #dbe7fb;
             border-radius: 16px;
-            padding: 20px;
+            padding: 16px;
         }
 
         .svr-grid {
@@ -394,12 +395,13 @@
         }
 
         .svr-card {
-            background: #1e293b;
+            background: #ffffff;
             border-radius: 14px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            border: 0;
+            border: 1px solid #d9e5f6;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
         }
 
         .svr-head {
@@ -407,8 +409,8 @@
             align-items: center;
             justify-content: space-between;
             padding: 12px 14px;
-            background: #162032;
-            border-bottom: 1px solid #2d3748;
+            background: #eef4ff;
+            border-bottom: 1px solid #d9e5f6;
         }
 
         .svr-head-left {
@@ -421,7 +423,7 @@
 
         .svr-num {
             font-weight: 700;
-            color: #f1f5f9;
+            color: #1e3a8a;
             font-size: 0.95rem;
         }
 
@@ -435,7 +437,7 @@
 
         .dot-green  { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.55); }
         .dot-orange { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,.55); }
-        .dot-gray   { background: #6b7280; }
+        .dot-gray   { background: #94a3b8; }
 
         .svr-body {
             padding: 14px;
@@ -448,17 +450,17 @@
             display: block;
             font-size: 0.81rem;
             font-weight: 600;
-            color: #94a3b8;
+            color: #475569;
             margin-bottom: 5px;
         }
 
         .svr-input {
             width: 100%;
-            background: #0f172a;
-            border: 1px solid #334155;
+            background: #f8fbff;
+            border: 1px solid #cbd9ee;
             border-radius: 8px;
             padding: 8px 10px;
-            color: #e2e8f0;
+            color: #1e293b;
             font-size: 0.88rem;
             outline: none;
             transition: border-color 120ms ease, box-shadow 120ms ease;
@@ -473,7 +475,7 @@
 
         .svr-adv-toggle {
             font-size: 0.80rem;
-            color: #64748b;
+            color: #475569;
             cursor: pointer;
             margin-bottom: 8px;
             user-select: none;
@@ -643,14 +645,22 @@
 
         .svr-action-wrap {
             padding: 10px;
-            background: #0f172a;
-            border-top: 1px solid rgba(148, 163, 184, 0.16);
+            background: #f8fbff;
+            border-top: 1px solid #d9e5f6;
         }
 
         .svr-timer-form {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
             gap: 8px;
+        }
+
+        .svr-status-bar {
+            padding: 8px 10px;
+            background: #f8fbff;
+            color: #475569;
+            font-size: 0.78rem;
+            border-bottom: 1px solid #d9e5f6;
         }
 
         .bulk-selection-card {
@@ -664,6 +674,279 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
             gap: 8px;
+        }
+
+        /* ===== Server Mirror Management — New Card Design ===== */
+        .svr-section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .svr-section-icon {
+            font-size: 1.6rem;
+            line-height: 1;
+        }
+
+        .svr-section-title {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--ink);
+        }
+
+        .svr-card-new {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #dde6f7;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .svr-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #f0f6ff 0%, #e8f0ff 100%);
+            border-bottom: 1px solid #dde6f7;
+        }
+
+        .svr-card-head-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .svr-card-icon {
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+
+        .svr-card-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .svr-card-mirror-label {
+            font-size: 0.82rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .svr-card-status-badge {
+            font-size: 0.78rem;
+            font-weight: 800;
+            padding: 5px 14px;
+            border-radius: 999px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .badge-active  { background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; }
+        .badge-standby { background: #fffbeb; color: #b45309; border: 1.5px solid #fcd34d; }
+        .badge-offline-card { background: #f3f4f6; color: #6b7280; border: 1.5px solid #d1d5db; }
+
+        .svr-card-status-section {
+            padding: 12px 16px;
+            background: #fafcff;
+            border-bottom: 1px solid #eef2fb;
+        }
+
+        .svr-status-line {
+            font-size: 0.88rem;
+            color: #374151;
+            line-height: 1.9;
+        }
+
+        .svr-status-bullet {
+            margin-right: 6px;
+            color: #94a3b8;
+        }
+
+        .svr-text-ok   { color: #16a34a; }
+        .svr-text-warn { color: #b45309; }
+
+        .svr-timer-info-text {
+            font-size: 0.78rem;
+            color: #b45309;
+            margin-left: 14px;
+        }
+
+        .svr-card-body {
+            padding: 14px 16px;
+        }
+
+        .svr-card-field {
+            margin-bottom: 12px;
+        }
+
+        .svr-card-label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+
+        .svr-card-input {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-size: 0.88rem;
+            color: #1e293b;
+            background: #fff;
+            outline: none;
+            transition: border-color 120ms ease, box-shadow 120ms ease;
+            box-sizing: border-box;
+        }
+
+        .svr-card-input:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+        }
+
+        .svr-card-advanced > summary.svr-card-adv-toggle {
+            font-size: 0.83rem;
+            color: #475569;
+            cursor: pointer;
+            list-style: none;
+            margin-bottom: 4px;
+        }
+
+        .svr-card-advanced > summary.svr-card-adv-toggle:hover {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+
+        .svr-card-primary-actions {
+            padding: 10px 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            border-top: 1px solid #f1f5fd;
+        }
+
+        .svr-action-btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 11px 10px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            transition: opacity 150ms, transform 80ms;
+            text-align: center;
+        }
+
+        .svr-action-btn:active { transform: scale(0.97); }
+
+        .btn-save-changes     { background: #0d9488; }
+        .btn-save-changes:hover { background: #0f766e; }
+        .btn-deactivate-hide  { background: #d97706; }
+        .btn-deactivate-hide:hover { background: #b45309; }
+
+        .svr-card-dropdown-wrap {
+            padding: 8px 16px;
+            border-top: 1px dashed #e2e8f0;
+            position: relative;
+        }
+
+        .btn-disable-remove {
+            width: 100%;
+            background: #dc2626;
+            color: #fff;
+            border: 0;
+            border-radius: 9px;
+            padding: 11px 14px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 150ms;
+        }
+
+        .btn-disable-remove:hover { background: #b91c1c; }
+
+        .svr-dropdown-arrow {
+            font-size: 0.72rem;
+            transition: transform 200ms;
+            display: inline-block;
+        }
+
+        .svr-dropdown-arrow.open { transform: rotate(180deg); }
+
+        .svr-dropdown-menu {
+            display: none;
+            background: #fff;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            margin-top: 6px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .svr-dropdown-menu.open { display: block; }
+
+        .svr-dropdown-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            border-bottom: 1px solid #fef2f2;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            color: #374151;
+            cursor: pointer;
+            transition: background 120ms;
+        }
+
+        .svr-dropdown-item:last-child { border-bottom: 0; }
+        .svr-dropdown-item:hover { background: #fef2f2; color: #dc2626; }
+        .svr-dropdown-item-danger { color: #dc2626; }
+        .svr-dropdown-item-danger:hover { background: #fee2e2; }
+
+        .svr-card-timer-section {
+            padding: 10px 16px 14px;
+            border-top: 1px solid #f1f5fd;
+        }
+
+        .svr-timer-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .svr-timer-input { flex: 1; min-width: 0; }
+
+        .svr-timer-btn {
+            border: 0;
+            border-radius: 8px;
+            padding: 9px 16px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: opacity 150ms;
+        }
+
+        .svr-timer-btn:hover { opacity: 0.88; }
+        .btn-timer-set   { background: #d97706; }
+        .btn-timer-reset { background: #16a34a; }
+
+        .svr-timer-hint {
+            margin-top: 5px;
+            font-size: 0.77rem;
+            color: #94a3b8;
         }
     </style>
 </head>
@@ -958,6 +1241,10 @@
                 </article>
 
                 <div class="svr-section">
+                    <div class="svr-section-header">
+                        <span class="svr-section-icon">☁️</span>
+                        <h4 class="svr-section-title">Server Mirror Management</h4>
+                    </div>
                     <div class="svr-grid">
                         @foreach ($servers as $idx => $server)
                             @php
@@ -967,99 +1254,143 @@
                                 $selectionRuntimeEnabled = (($server['selection_runtime_enabled'] ?? true) === true);
                                 $selectionTimedDisabled = (($server['selection_timed_disabled'] ?? false) === true);
                                 $selectionDisabledUntil = $server['selection_disabled_until'] ?? null;
-                                $dotClass = $isUp ? ($idx === 0 ? 'dot-green' : 'dot-orange') : 'dot-gray';
-                                $btnClass = $isUp ? ($idx === 0 ? 'svr-btn-green' : 'svr-btn-orange') : 'svr-btn-dark';
+                                $lbEnabled = (($server['lb_enabled'] ?? false) === true);
+                                $cardStatusText  = $isUp ? ($idx === 0 ? 'ACTIVE' : 'STANDBY') : 'OFFLINE';
+                                $cardStatusClass = $isUp ? ($idx === 0 ? 'badge-active' : 'badge-standby') : 'badge-offline-card';
                             @endphp
-                            <form action="{{ route('cbt.server.update', $server['key']) }}" method="post" class="svr-card">
-                                @csrf
-                                <div class="svr-head">
-                                    <div class="svr-head-left">
-                                        <span class="svr-icon">🖥</span>
-                                        <span class="svr-num">Mirror {{ $idx + 1 }}</span>
-                                    </div>
-                                    <span class="svr-dot {{ $dotClass }}"></span>
-                                </div>
-                                <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-top: 1px solid rgba(148, 163, 184, 0.16); border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
-                                    Status Tampil: <strong style="color: {{ $isHidden ? '#f59e0b' : '#22c55e' }};">{{ $isHidden ? 'HIDDEN' : 'VISIBLE' }}</strong>
-                                </div>
-                                <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
-                                    Status LB: <strong style="color: {{ (($server['lb_enabled'] ?? false) === true) ? '#22c55e' : '#f59e0b' }};">{{ (($server['lb_enabled'] ?? false) === true) ? 'AKTIF' : 'NONAKTIF' }}</strong>
-                                </div>
-                                <div style="padding: 8px 10px; background: #0b1220; color: #9fb0c5; font-size: 0.78rem; border-bottom: 1px solid rgba(148, 163, 184, 0.16);">
-                                    Pilih di Exambro: <strong style="color: {{ $selectionRuntimeEnabled ? '#22c55e' : '#f59e0b' }};">{{ $selectionRuntimeEnabled ? 'AKTIF' : 'NONAKTIF' }}</strong>
-                                    @if ($selectionTimedDisabled && !empty($selectionDisabledUntil))
-                                        <div style="margin-top:4px; color:#f59e0b;">Timer sampai: {{ $selectionDisabledUntil }}</div>
-                                    @endif
-                                </div>
-                                <div class="svr-body">
-                                    <div class="svr-field">
-                                        <label class="svr-label">Nama Mirror</label>
-                                        <input class="svr-input" name="server_name" type="text" maxlength="60" value="{{ $server['name'] }}" required>
-                                    </div>
-                                    <div class="svr-field">
-                                        <label class="svr-label">URL Mirror</label>
-                                        <input class="svr-input" name="server_url" type="url" maxlength="255" value="{{ $server['url'] }}" required>
-                                    </div>
-                                    <details class="svr-advanced">
-                                        <summary class="svr-adv-toggle">Spesifikasi dan Kapasitas</summary>
-                                        <div class="svr-field">
-                                            <label class="svr-label">Core CPU</label>
-                                            <input class="svr-input" name="server_core" type="number" min="1" max="256" value="{{ $server['core'] ?? 4 }}" required>
+
+                            <div class="svr-card-new">
+                                {{-- Card Header --}}
+                                <div class="svr-card-head">
+                                    <div class="svr-card-head-left">
+                                        <span class="svr-card-icon">🖥</span>
+                                        <div>
+                                            <div class="svr-card-name">{{ $server['name'] }}</div>
+                                            <div class="svr-card-mirror-label">[Mirror {{ $idx + 1 }}]</div>
                                         </div>
-                                        <div class="svr-field">
-                                            <label class="svr-label">RAM</label>
-                                            <input class="svr-input" name="server_ram" type="text" maxlength="30" value="{{ $server['ram'] ?? '8 GB' }}" required>
-                                        </div>
-                                        <div class="svr-field">
-                                            <label class="svr-label">Kapasitas Peserta</label>
-                                            <input class="svr-input" name="server_capacity" type="number" min="1" max="100000" value="{{ $server['capacity'] ?? 40 }}" required>
-                                        </div>
-                                    </details>
-                                </div>
-                                <div class="svr-action-wrap">
-                                    <button type="submit" class="svr-btn {{ $btnClass }}">Simpan Perubahan</button>
-                                </div>
-                                <div class="svr-action-wrap">
-                                    <button type="submit" class="svr-btn" style="background: {{ $isHidden ? '#16a34a' : '#f59e0b' }}; border-radius: 8px;" form="visibility-server-{{ $server['key'] }}">{{ $isHidden ? 'Tampilkan Mirror' : 'Sembunyikan Mirror' }}</button>
-                                </div>
-                                <div class="svr-action-wrap">
-                                    <button type="submit" class="svr-btn" style="background: {{ (($server['lb_enabled'] ?? false) === true) ? '#dc2626' : '#16a34a' }}; border-radius: 8px;" form="lb-server-{{ $server['key'] }}">{{ (($server['lb_enabled'] ?? false) === true) ? 'Nonaktifkan LB' : 'Aktifkan LB' }}</button>
-                                </div>
-                                <div class="svr-action-wrap">
-                                    <button type="submit" class="svr-btn" style="background: {{ $selectionEnabled ? '#dc2626' : '#16a34a' }}; border-radius: 8px;" form="selection-toggle-server-{{ $server['key'] }}">{{ $selectionEnabled ? 'Nonaktifkan Pilihan Exambro' : 'Aktifkan Pilihan Exambro' }}</button>
-                                </div>
-                                <div class="svr-action-wrap">
-                                    <form action="{{ route('cbt.server.selection.timer', $server['key']) }}" method="post" class="svr-timer-form">
-                                        @csrf
-                                        <input name="disable_minutes" type="number" min="1" max="1440" class="svr-input" placeholder="Disable menit (contoh 30)">
-                                        <button type="submit" class="svr-btn" style="background:#f59e0b; border-radius: 8px;">Set Timer</button>
-                                        <button type="submit" name="clear_timer" value="1" class="svr-btn" style="background:#16a34a; border-radius: 8px;">Reset Timer</button>
-                                    </form>
-                                </div>
-                                @if (count($servers) > 1)
-                                    <div class="svr-action-wrap">
-                                        <button type="submit" class="svr-btn" style="background: #dc2626; border-radius: 8px;" form="delete-server-{{ $server['key'] }}">Hapus Mirror</button>
                                     </div>
-                                @endif
-                            </form>
+                                    <span class="svr-card-status-badge {{ $cardStatusClass }}">{{ $cardStatusText }}</span>
+                                </div>
 
-                            <form id="visibility-server-{{ $server['key'] }}" action="{{ route('cbt.server.visibility.toggle', $server['key']) }}" method="post" style="display:none;">
-                                @csrf
-                            </form>
+                                {{-- Status Info --}}
+                                <div class="svr-card-status-section">
+                                    <div class="svr-status-line">
+                                        <span class="svr-status-bullet">•</span>
+                                        Status Tampil: <strong class="{{ $isHidden ? 'svr-text-warn' : 'svr-text-ok' }}">{{ $isHidden ? 'HIDDEN' : 'VISIBLE' }}</strong>
+                                    </div>
+                                    <div class="svr-status-line">
+                                        <span class="svr-status-bullet">•</span>
+                                        Status LB: <strong class="{{ $lbEnabled ? 'svr-text-ok' : 'svr-text-warn' }}">{{ $lbEnabled ? 'AKTIF' : 'NONAKTIF' }}</strong>
+                                    </div>
+                                    <div class="svr-status-line">
+                                        <span class="svr-status-bullet">•</span>
+                                        Pilih di Exambro: <strong class="{{ $selectionRuntimeEnabled ? 'svr-text-ok' : 'svr-text-warn' }}">{{ $selectionRuntimeEnabled ? 'AKTIF' : 'NONAKTIF' }}</strong>
+                                        @if ($selectionTimedDisabled && !empty($selectionDisabledUntil))
+                                            <div class="svr-timer-info-text">Timer sampai: {{ $selectionDisabledUntil }}</div>
+                                        @endif
+                                    </div>
+                                </div>
 
-                            <form id="lb-server-{{ $server['key'] }}" action="{{ route('cbt.server.lb.toggle', $server['key']) }}" method="post" style="display:none;">
-                                @csrf
-                            </form>
+                                {{-- Main Update Form --}}
+                                <form action="{{ route('cbt.server.update', $server['key']) }}" method="post">
+                                    @csrf
+                                    <div class="svr-card-body">
+                                        <div class="svr-card-field">
+                                            <label class="svr-card-label">Nama Mirror</label>
+                                            <input class="svr-card-input" name="server_name" type="text" maxlength="60" value="{{ $server['name'] }}" required>
+                                        </div>
+                                        <div class="svr-card-field">
+                                            <label class="svr-card-label">URL Mirror</label>
+                                            <input class="svr-card-input" name="server_url" type="url" maxlength="255" value="{{ $server['url'] }}" required>
+                                        </div>
+                                        <details class="svr-card-advanced">
+                                            <summary class="svr-card-adv-toggle">Spesifikasi dan Kapasitas &rsaquo;</summary>
+                                            <div style="margin-top: 8px;">
+                                                <div class="svr-card-field">
+                                                    <label class="svr-card-label">Core CPU</label>
+                                                    <input class="svr-card-input" name="server_core" type="number" min="1" max="256" value="{{ $server['core'] ?? 4 }}" required>
+                                                </div>
+                                                <div class="svr-card-field">
+                                                    <label class="svr-card-label">RAM</label>
+                                                    <input class="svr-card-input" name="server_ram" type="text" maxlength="30" value="{{ $server['ram'] ?? '8 GB' }}" required>
+                                                </div>
+                                                <div class="svr-card-field">
+                                                    <label class="svr-card-label">Kapasitas Peserta</label>
+                                                    <input class="svr-card-input" name="server_capacity" type="number" min="1" max="100000" value="{{ $server['capacity'] ?? 40 }}" required>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
 
-                            <form id="selection-toggle-server-{{ $server['key'] }}" action="{{ route('cbt.server.selection.toggle', $server['key']) }}" method="post" style="display:none;">
-                                @csrf
-                            </form>
+                                    {{-- Primary Action Buttons --}}
+                                    <div class="svr-card-primary-actions">
+                                        <button type="submit" class="svr-action-btn btn-save-changes">Save Changes</button>
+                                        <button type="button" class="svr-action-btn btn-deactivate-hide"
+                                            onclick="document.getElementById('visibility-server-{{ $server['key'] }}').submit()">
+                                            Deactivate/Hide Options
+                                        </button>
+                                    </div>
+                                </form>
 
-                            @if (count($servers) > 1)
-                                <form id="delete-server-{{ $server['key'] }}" action="{{ route('cbt.server.delete', $server['key']) }}" method="post" style="display:none;">
+                                {{-- Disable / Remove Dropdown --}}
+                                <div class="svr-card-dropdown-wrap">
+                                    <button type="button" class="btn-disable-remove"
+                                        onclick="toggleSvrDropdown('{{ $server['key'] }}')">
+                                        Disable / Remove Mirror Options
+                                        <span class="svr-dropdown-arrow" id="svr-arrow-{{ $server['key'] }}">▼</span>
+                                    </button>
+                                    <div class="svr-dropdown-menu" id="svr-dropdown-menu-{{ $server['key'] }}">
+                                        <button type="submit" form="lb-server-{{ $server['key'] }}" class="svr-dropdown-item">
+                                            {{ $lbEnabled ? 'Disable Load Balancer' : 'Enable Load Balancer' }}
+                                        </button>
+                                        <button type="submit" form="selection-toggle-server-{{ $server['key'] }}" class="svr-dropdown-item">
+                                            {{ $selectionEnabled ? 'Disable Exambro Option' : 'Enable Exambro Option' }}
+                                        </button>
+                                        @if (count($servers) > 1)
+                                            <button type="submit" form="delete-server-{{ $server['key'] }}" class="svr-dropdown-item svr-dropdown-item-danger">
+                                                Delete Mirror
+                                            </button>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                {{-- Timer Section --}}
+                                <div class="svr-card-timer-section">
+                                    <div class="svr-timer-row">
+                                        <input id="timer-minutes-{{ $server['key'] }}" type="number" min="1" max="1440"
+                                            class="svr-card-input svr-timer-input" placeholder="Disable minutes">
+                                        <button type="button" class="svr-timer-btn btn-timer-set"
+                                            onclick="submitServerSelectionTimer('{{ $server['key'] }}')">Set</button>
+                                        <button type="submit" form="selection-timer-reset-server-{{ $server['key'] }}"
+                                            class="svr-timer-btn btn-timer-reset">Reset</button>
+                                    </div>
+                                    <div class="svr-timer-hint">Disable minutes (contoh 30)</div>
+                                </div>
+
+                                {{-- Hidden Forms --}}
+                                <form id="visibility-server-{{ $server['key'] }}" action="{{ route('cbt.server.visibility.toggle', $server['key']) }}" method="post" style="display:none;">
                                     @csrf
                                 </form>
-                            @endif
+                                <form id="lb-server-{{ $server['key'] }}" action="{{ route('cbt.server.lb.toggle', $server['key']) }}" method="post" style="display:none;">
+                                    @csrf
+                                </form>
+                                <form id="selection-toggle-server-{{ $server['key'] }}" action="{{ route('cbt.server.selection.toggle', $server['key']) }}" method="post" style="display:none;">
+                                    @csrf
+                                </form>
+                                <form id="selection-timer-set-server-{{ $server['key'] }}" action="{{ route('cbt.server.selection.timer', $server['key']) }}" method="post" style="display:none;">
+                                    @csrf
+                                    <input type="hidden" name="disable_minutes" id="selection-timer-hidden-minutes-{{ $server['key'] }}">
+                                </form>
+                                <form id="selection-timer-reset-server-{{ $server['key'] }}" action="{{ route('cbt.server.selection.timer', $server['key']) }}" method="post" style="display:none;">
+                                    @csrf
+                                    <input type="hidden" name="clear_timer" value="1">
+                                </form>
+                                @if (count($servers) > 1)
+                                    <form id="delete-server-{{ $server['key'] }}" action="{{ route('cbt.server.delete', $server['key']) }}" method="post" style="display:none;">
+                                        @csrf
+                                    </form>
+                                @endif
+                            </div>
                         @endforeach
                     </div>
                 </div>
@@ -1286,6 +1617,56 @@
                 btn.textContent = 'Sync Token dari DB';
             });
         }
+
+        function submitServerSelectionTimer(serverKey) {
+            var minutesInput = document.getElementById('timer-minutes-' + serverKey);
+            var hiddenMinutesInput = document.getElementById('selection-timer-hidden-minutes-' + serverKey);
+            var form = document.getElementById('selection-timer-set-server-' + serverKey);
+
+            if (!minutesInput || !hiddenMinutesInput || !form) {
+                return;
+            }
+
+            var minutes = parseInt(minutesInput.value, 10);
+            if (!Number.isFinite(minutes) || minutes <= 0) {
+                alert('Isi durasi disable (menit) dengan angka lebih dari 0.');
+                minutesInput.focus();
+                return;
+            }
+
+            hiddenMinutesInput.value = String(minutes);
+            form.submit();
+        }
+
+        function toggleSvrDropdown(serverKey) {
+            var menu  = document.getElementById('svr-dropdown-menu-' + serverKey);
+            var arrow = document.getElementById('svr-arrow-' + serverKey);
+            var isOpen = menu.classList.contains('open');
+
+            // Close all dropdowns first
+            document.querySelectorAll('.svr-dropdown-menu.open').forEach(function (m) {
+                m.classList.remove('open');
+            });
+            document.querySelectorAll('.svr-dropdown-arrow.open').forEach(function (a) {
+                a.classList.remove('open');
+            });
+
+            if (!isOpen) {
+                menu.classList.add('open');
+                if (arrow) { arrow.classList.add('open'); }
+            }
+        }
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.svr-card-dropdown-wrap')) {
+                document.querySelectorAll('.svr-dropdown-menu.open').forEach(function (m) {
+                    m.classList.remove('open');
+                });
+                document.querySelectorAll('.svr-dropdown-arrow.open').forEach(function (a) {
+                    a.classList.remove('open');
+                });
+            }
+        });
     </script>
 </body>
 </html>
