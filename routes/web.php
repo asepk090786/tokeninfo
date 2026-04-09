@@ -81,4 +81,6 @@ Route::post('/admin/server/{key}/selection-timer', [CbtInfoController::class, 's
 Route::post('/admin/server/selection-all/timer', [CbtInfoController::class, 'setAllServerSelectionTimer'])->name('cbt.server.selection.all.timer');
 Route::post('/admin/server/{key}/delete', [CbtInfoController::class, 'deleteServer'])->name('cbt.server.delete');
 Route::post('/admin/flush-cache', [CbtInfoController::class, 'flushCache'])->name('cbt.admin.flush-cache');
+Route::post('/admin/redis-config', [CbtInfoController::class, 'updateRedisConfig'])->name('cbt.admin.redis.config');
+Route::post('/admin/redis-test', [CbtInfoController::class, 'testRedisConnection'])->name('cbt.admin.redis.test');
 Route::post('/admin/logout', [CbtInfoController::class, 'logout'])->name('cbt.admin.logout');

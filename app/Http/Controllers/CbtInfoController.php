@@ -494,6 +494,7 @@ class CbtInfoController extends Controller
         $versionSyncServersText = $this->exportVersionSyncServersAsText($versionSyncServers);
         $versionData = $this->readVersionPayloadFromFile();
         $currentConfigVersion = trim((string) ($versionData['config_version'] ?? ''));
+        $redisConfig = $this->readRedisClusterConfig();
 
         return view('cbt-info.admin', compact(
             'info',
@@ -516,8 +517,135 @@ class CbtInfoController extends Controller
             'versionSyncServers',
             'versionSyncTargets',
             'versionSyncServersText',
-            'currentConfigVersion'
+            'currentConfigVersion',
+            'redisConfig'
         ));
+    }
+
+    public function updateRedisConfig(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'redis_enabled'  => ['nullable', 'in:0,1'],
+            'redis_host'     => ['nullable', 'string', 'max:253'],
+            'redis_port'     => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'redis_password' => ['nullable', 'string', 'max:256'],
+            'redis_prefix'   => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_\-]*$/'],
+        ]);
+
+        $enabled  = ($validated['redis_enabled'] ?? '0') === '1';
+        $host     = trim((string) ($validated['redis_host'] ?? '127.0.0.1'));
+        $port     = max(1, min(65535, (int) ($validated['redis_port'] ?? 6379)));
+        $password = trim((string) ($validated['redis_password'] ?? ''));
+        $prefix   = trim((string) ($validated['redis_prefix'] ?? 'tokeninfo_'));
+
+        $config = [
+            'enabled'  => $enabled,
+            'host'     => $host !== '' ? $host : '127.0.0.1',
+            'port'     => $port,
+            'password' => $password,
+            'prefix'   => $prefix !== '' ? $prefix : 'tokeninfo_',
+            'updated_at' => now()->toIso8601String(),
+        ];
+
+        $this->writeRedisClusterConfig($config);
+
+        return redirect('/admin/cbt-info#panel-redis-cluster')
+            ->with('status', 'Konfigurasi Redis Cluster berhasil disimpan. Reload halaman untuk menerapkan.');
+    }
+
+    public function testRedisConnection(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
+        }
+
+        $host     = trim((string) $request->input('host', '127.0.0.1'));
+        $port     = max(1, min(65535, (int) $request->input('port', 6379)));
+        $password = trim((string) $request->input('password', ''));
+
+        if ($host === '') {
+            return response()->json(['status' => 'error', 'message' => 'Host tidak boleh kosong.']);
+        }
+
+        try {
+            $client = new \Redis();
+            $connected = @$client->connect($host, $port, 3);
+
+            if (! $connected) {
+                return response()->json(['status' => 'error', 'message' => "Gagal konek ke {$host}:{$port}." ]);
+            }
+
+            if ($password !== '') {
+                $auth = $client->auth($password);
+                if (! $auth) {
+                    $client->close();
+                    return response()->json(['status' => 'error', 'message' => 'Password Redis salah.']);
+                }
+            }
+
+            $ping = $client->ping('hello');
+            $client->close();
+
+            if ($ping === 'hello' || $ping === true || $ping === '+PONG') {
+                return response()->json([
+                    'status'  => 'ok',
+                    'message' => "Koneksi ke {$host}:{$port} berhasil. Redis siap digunakan.",
+                ]);
+            }
+
+            return response()->json(['status' => 'error', 'message' => 'Tidak dapat PING ke Redis.']);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    private function redisClusterConfigFilePath(): string
+    {
+        return storage_path('app/private/redis-cluster.json');
+    }
+
+    private function readRedisClusterConfig(): array
+    {
+        $path = $this->redisClusterConfigFilePath();
+
+        if (! file_exists($path)) {
+            return [
+                'enabled'  => false,
+                'host'     => '127.0.0.1',
+                'port'     => 6379,
+                'password' => '',
+                'prefix'   => 'tokeninfo_',
+            ];
+        }
+
+        $decoded = json_decode((string) file_get_contents($path), true);
+        if (! is_array($decoded)) {
+            return ['enabled' => false, 'host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'prefix' => 'tokeninfo_'];
+        }
+
+        return [
+            'enabled'  => (bool) ($decoded['enabled'] ?? false),
+            'host'     => (string) ($decoded['host'] ?? '127.0.0.1'),
+            'port'     => (int) ($decoded['port'] ?? 6379),
+            'password' => (string) ($decoded['password'] ?? ''),
+            'prefix'   => (string) ($decoded['prefix'] ?? 'tokeninfo_'),
+        ];
+    }
+
+    private function writeRedisClusterConfig(array $config): void
+    {
+        $path = $this->redisClusterConfigFilePath();
+        $dir  = dirname($path);
+
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        file_put_contents($path, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     public function updateVersionSyncServers(Request $request)
@@ -528,6 +656,7 @@ class CbtInfoController extends Controller
 
         $validated = $request->validate([
             'version_sync_servers_text' => ['nullable', 'string', 'max:20000'],
+
         ]);
 
         $rawText = (string) ($validated['version_sync_servers_text'] ?? '');

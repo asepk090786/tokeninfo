@@ -980,6 +980,10 @@
                     Server JSON Sync
                     <small>Kelola daftar server khusus tujuan sinkron version.json</small>
                 </button>
+                <button class="menu-btn" data-target="panel-redis-cluster" type="button">
+                    Redis Cluster
+                    <small>Hubungkan beberapa server melalui satu pusat Redis</small>
+                </button>
             </nav>
 
             <div class="sidebar-actions">
@@ -1615,6 +1619,98 @@ Tidak ada target mirror valid.
                     </form>
                 </article>
             </section>
+
+            <section id="panel-redis-cluster" class="panel">
+                <h3>Redis Cluster</h3>
+                <p class="panel-desc">Aktifkan Redis untuk menghubungkan beberapa server. Satu server bertindak sebagai pusat Redis (master), server lainnya dikonfigurasi di panel ini untuk terhubung ke sana. Konfigurasi disimpan di file dan dibaca sejak awal boot — tidak bergantung pada database.</p>
+
+                @if (session('status'))
+                    <div class="alert-ok" style="margin-bottom:16px;">{{ session('status') }}</div>
+                @endif
+
+                <article class="card" style="margin-top:12px;">
+                    <h4>Konfigurasi Koneksi Redis</h4>
+                    <form id="redis-config-form" action="{{ route('cbt.admin.redis.config') }}" method="post">
+                        @csrf
+
+                        <div class="field" style="margin-bottom:14px;">
+                            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                <input type="hidden" name="redis_enabled" value="0">
+                                <input type="checkbox" name="redis_enabled" value="1" id="redis_enabled"
+                                    {{ $redisConfig['enabled'] ? 'checked' : '' }}
+                                    style="width:18px;height:18px;cursor:pointer;">
+                                <span><strong>Aktifkan Redis Cluster</strong></span>
+                            </label>
+                            <small style="margin-top:4px;display:block;">Jika diaktifkan, cache dan sesi seluruh server akan menggunakan Redis yang dikonfigurasi di bawah.</small>
+                        </div>
+
+                        <div class="field">
+                            <label for="redis_host">Host / IP Redis Master</label>
+                            <input type="text" id="redis_host" name="redis_host" placeholder="127.0.0.1"
+                                value="{{ old('redis_host', $redisConfig['host']) }}">
+                            <small>Isi dengan IP privat atau hostname server Redis master.</small>
+                        </div>
+
+                        <div class="field">
+                            <label for="redis_port">Port Redis</label>
+                            <input type="number" id="redis_port" name="redis_port" placeholder="6379" min="1" max="65535"
+                                value="{{ old('redis_port', $redisConfig['port']) }}">
+                        </div>
+
+                        <div class="field">
+                            <label for="redis_password">Password Redis (kosongkan jika tidak ada)</label>
+                            <input type="password" id="redis_password" name="redis_password" placeholder="(kosong = tanpa password)"
+                                value="{{ old('redis_password', $redisConfig['password']) }}"
+                                autocomplete="new-password">
+                        </div>
+
+                        <div class="field">
+                            <label for="redis_prefix">Prefix Key (<code>tokeninfo_</code> jika dikosongkan)</label>
+                            <input type="text" id="redis_prefix" name="redis_prefix" placeholder="tokeninfo_"
+                                value="{{ old('redis_prefix', $redisConfig['prefix']) }}">
+                            <small>Pisahkan data antar-aplikasi di Redis yang sama menggunakan prefix unik.</small>
+                        </div>
+
+                        <div class="btn-row">
+                            <button class="btn-primary" type="submit">Simpan Konfigurasi Redis</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="card" style="margin-top:16px;">
+                    <h4>Uji Koneksi Redis</h4>
+                    <p>Masukkan data koneksi lalu klik tombol untuk mengecek apakah Redis dapat dijangkau dari server ini tanpa menyimpan konfigurasi.</p>
+                    <div class="field">
+                        <label for="test_redis_host">Host Uji</label>
+                        <input type="text" id="test_redis_host" placeholder="127.0.0.1"
+                            value="{{ $redisConfig['host'] }}">
+                    </div>
+                    <div class="field">
+                        <label for="test_redis_port">Port Uji</label>
+                        <input type="number" id="test_redis_port" placeholder="6379" min="1" max="65535"
+                            value="{{ $redisConfig['port'] }}">
+                    </div>
+                    <div class="field">
+                        <label for="test_redis_password">Password Uji</label>
+                        <input type="password" id="test_redis_password" placeholder="(kosong = tanpa password)">
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-primary" type="button" id="btn-redis-test">Uji Koneksi Sekarang</button>
+                    </div>
+                    <div id="redis-test-result" style="margin-top:12px;display:none;"></div>
+                </article>
+
+                <article class="card" style="margin-top:16px;">
+                    <h4>Cara Kerja</h4>
+                    <ol style="padding-left:18px;line-height:1.7;">
+                        <li>Instal Redis di satu server (server <strong>master Redis</strong>).</li>
+                        <li>Pastikan Redis dapat diakses dari seluruh server lain via IP privat (bind atau firewall).</li>
+                        <li>Di setiap server, buka panel ini dan isi IP master Redis lalu aktifkan.</li>
+                        <li>Klik <em>Simpan</em>. Tidak perlu restart PHP-FPM — konfigurasi dibaca ulang tiap request.</li>
+                        <li>Cache dan sesi seluruh server akan terpusat di Redis master secara otomatis.</li>
+                    </ol>
+                </article>
+            </section>
         </main>
     </div>
 
@@ -1622,6 +1718,41 @@ Tidak ada target mirror valid.
         (function () {
             var menuButtons = Array.prototype.slice.call(document.querySelectorAll('.menu-btn'));
             var panels = Array.prototype.slice.call(document.querySelectorAll('.panel'));
+
+            // Redis test connection
+            var btnRedisTest = document.getElementById('btn-redis-test');
+            if (btnRedisTest) {
+                btnRedisTest.addEventListener('click', function () {
+                    var host = document.getElementById('test_redis_host').value.trim();
+                    var port = document.getElementById('test_redis_port').value.trim();
+                    var password = document.getElementById('test_redis_password').value;
+                    var resultBox = document.getElementById('redis-test-result');
+
+                    resultBox.style.display = 'block';
+                    resultBox.style.color = '#888';
+                    resultBox.textContent = 'Menguji koneksi...';
+
+                    var formData = new FormData();
+                    formData.append('host', host);
+                    formData.append('port', port);
+                    formData.append('password', password);
+                    formData.append('_token', '{{ csrf_token() }}');
+
+                    fetch('{{ route("cbt.admin.redis.test") }}', {
+                        method: 'POST',
+                        body: formData,
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        resultBox.style.color = data.status === 'ok' ? '#2a7a2a' : '#c0392b';
+                        resultBox.textContent = data.message;
+                    })
+                    .catch(function () {
+                        resultBox.style.color = '#c0392b';
+                        resultBox.textContent = 'Gagal mengirim request.';
+                    });
+                });
+            }
 
             function setActive(targetId) {
                 menuButtons.forEach(function (btn) {

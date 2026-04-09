@@ -11,10 +11,44 @@ class AppServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.
+     * Runs BEFORE cache/session providers — safe to override Redis config here.
      */
     public function register(): void
     {
-        //
+        $configFile = storage_path('app/private/redis-cluster.json');
+
+        if (! file_exists($configFile)) {
+            return;
+        }
+
+        $json = json_decode((string) file_get_contents($configFile), true);
+
+        if (! is_array($json) || ! ($json['enabled'] ?? false)) {
+            return;
+        }
+
+        $host     = trim((string) ($json['host'] ?? '127.0.0.1'));
+        $port     = max(1, (int) ($json['port'] ?? 6379));
+        $password = trim((string) ($json['password'] ?? '')) ?: null;
+        $prefix   = trim((string) ($json['prefix'] ?? 'tokeninfo_'));
+
+        config([
+            // Redis connection: default
+            'database.redis.default.host'     => $host,
+            'database.redis.default.port'     => $port,
+            'database.redis.default.password' => $password,
+            'database.redis.default.prefix'   => $prefix,
+            // Redis connection: cache
+            'database.redis.cache.host'     => $host,
+            'database.redis.cache.port'     => $port,
+            'database.redis.cache.password' => $password,
+            'database.redis.cache.prefix'   => $prefix . 'cache_',
+            // Switch cache and session drivers to Redis
+            'cache.default'           => 'redis',
+            'cache.stores.redis.connection' => 'cache',
+            'session.driver'          => 'redis',
+            'session.connection'      => 'default',
+        ]);
     }
 
     /**
