@@ -153,7 +153,6 @@ class CbtInfoController extends Controller
         }
 
         $payload = $this->buildMirrorListPayload($servers);
-        $this->writeMirrorListFile($servers);
 
         return response()
             ->json($payload)
