@@ -489,7 +489,9 @@ class CbtInfoController extends Controller
         $loadBalancerLinkAvailable = $loadBalancerMirrorCount > 1;
         $mirrorListUrl = url('api/mirror_list.json');
         $versionSyncSettings = $this->getVersionSyncSettings();
-        $versionSyncTargets = $this->collectVersionSyncTargets($servers);
+        $versionSyncServers = $this->getVersionSyncServers();
+        $versionSyncTargets = $this->collectVersionSyncTargets($versionSyncServers);
+        $versionSyncServersText = $this->exportVersionSyncServersAsText($versionSyncServers);
         $versionData = $this->readVersionPayloadFromFile();
         $currentConfigVersion = trim((string) ($versionData['config_version'] ?? ''));
 
@@ -511,9 +513,29 @@ class CbtInfoController extends Controller
             'loadBalancerLinkAvailable',
             'mirrorListUrl',
             'versionSyncSettings',
+            'versionSyncServers',
             'versionSyncTargets',
+            'versionSyncServersText',
             'currentConfigVersion'
         ));
+    }
+
+    public function updateVersionSyncServers(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'version_sync_servers_text' => ['nullable', 'string', 'max:20000'],
+        ]);
+
+        $rawText = (string) ($validated['version_sync_servers_text'] ?? '');
+        $servers = $this->parseVersionSyncServersText($rawText);
+        $this->writePersistedSetting('version_sync_servers', $servers);
+
+        return redirect('/admin/cbt-info#panel-version-sync-servers')
+            ->with('status', 'Daftar server sinkron version.json berhasil diperbarui.');
     }
 
     public function updateVersionSyncSettings(Request $request)
@@ -563,8 +585,7 @@ class CbtInfoController extends Controller
                 ->withErrors(['version_sync' => 'File version.json tidak valid atau tidak ditemukan.']);
         }
 
-        $servers = $this->buildServerList($this->getInfoFromGarudaCbt(), true);
-        $targets = $this->collectVersionSyncTargets($servers);
+        $targets = $this->collectVersionSyncTargets($this->getVersionSyncServers());
 
         if ($targets === []) {
             return redirect('/admin/cbt-info#panel-version-sync')
@@ -609,7 +630,7 @@ class CbtInfoController extends Controller
         $targetCount = count($targets);
         if ($successCount === $targetCount) {
             return redirect('/admin/cbt-info#panel-version-sync')
-                ->with('status', "Sinkronisasi version.json berhasil ke {$successCount}/{$targetCount} mirror.");
+                ->with('status', "Sinkronisasi version.json berhasil ke {$successCount}/{$targetCount} server JSON.");
         }
 
         $failedLabel = implode(', ', array_slice($failedHosts, 0, 5));
@@ -2759,13 +2780,24 @@ class CbtInfoController extends Controller
         ];
     }
 
-    private function collectVersionSyncTargets(array $servers): array
+    private function getVersionSyncServers(): array
+    {
+        $stored = $this->readPersistedSetting('version_sync_servers', []);
+
+        if (! is_array($stored)) {
+            return [];
+        }
+
+        return $this->normalizeVersionSyncServers($stored);
+    }
+
+    private function collectVersionSyncTargets(array $syncServers): array
     {
         $request = request();
         $currentHost = $request instanceof Request ? strtolower((string) $request->getHost()) : '';
         $targets = [];
 
-        foreach ($servers as $server) {
+        foreach ($syncServers as $server) {
             if (! is_array($server)) {
                 continue;
             }
@@ -2791,6 +2823,97 @@ class CbtInfoController extends Controller
         }
 
         return array_values($targets);
+    }
+
+    private function normalizeVersionSyncServers(array $servers): array
+    {
+        $normalized = [];
+
+        foreach ($servers as $server) {
+            if (! is_array($server)) {
+                continue;
+            }
+
+            $url = trim((string) ($server['url'] ?? ''));
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+            if ($host === '') {
+                continue;
+            }
+
+            $normalized[$host] = [
+                'name' => trim((string) ($server['name'] ?? $host)) ?: $host,
+                'url' => rtrim($url, '/'),
+            ];
+        }
+
+        return array_values($normalized);
+    }
+
+    private function parseVersionSyncServersText(string $rawText): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $rawText) ?: [];
+        $servers = [];
+
+        foreach ($lines as $line) {
+            $value = trim((string) $line);
+            if ($value === '' || str_starts_with($value, '#')) {
+                continue;
+            }
+
+            $name = '';
+            $url = $value;
+
+            if (str_contains($value, '|')) {
+                [$namePart, $urlPart] = array_pad(explode('|', $value, 2), 2, '');
+                $name = trim((string) $namePart);
+                $url = trim((string) $urlPart);
+            }
+
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+            if ($host === '') {
+                continue;
+            }
+
+            $servers[$host] = [
+                'name' => $name !== '' ? $name : $host,
+                'url' => rtrim($url, '/'),
+            ];
+        }
+
+        return array_values($servers);
+    }
+
+    private function exportVersionSyncServersAsText(array $servers): string
+    {
+        if ($servers === []) {
+            return '';
+        }
+
+        $lines = [];
+
+        foreach ($servers as $server) {
+            if (! is_array($server)) {
+                continue;
+            }
+
+            $name = trim((string) ($server['name'] ?? ''));
+            $url = trim((string) ($server['url'] ?? ''));
+            if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $lines[] = ($name !== '' ? $name : 'Server') . '|' . $url;
+        }
+
+        return implode("\n", $lines);
     }
 
     private function truthy(mixed $value): bool

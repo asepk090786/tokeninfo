@@ -70,6 +70,7 @@ Route::post('/admin/exambro-pin-toggle', [CbtInfoController::class, 'toggleExamb
 Route::get('/admin/neo-exam/download-zip', [CbtInfoController::class, 'downloadNeoExamZip'])->name('cbt.neo-exam.zip.download');
 Route::post('/admin/user-agent-settings', [CbtInfoController::class, 'updateUserAgentSettings'])->name('cbt.user-agent.update');
 Route::post('/admin/version-sync-settings', [CbtInfoController::class, 'updateVersionSyncSettings'])->name('cbt.version.sync.settings.update');
+Route::post('/admin/version-sync-servers', [CbtInfoController::class, 'updateVersionSyncServers'])->name('cbt.version.sync.servers.update');
 Route::post('/admin/version-sync-now', [CbtInfoController::class, 'syncVersionNow'])->name('cbt.version.sync.now');
 Route::post('/admin/server', [CbtInfoController::class, 'addServer'])->name('cbt.server.add');
 Route::post('/admin/server/{key}', [CbtInfoController::class, 'updateServerSettings'])->name('cbt.server.update');

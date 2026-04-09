@@ -974,7 +974,11 @@
                 </button>
                 <button class="menu-btn" data-target="panel-version-sync" type="button">
                     Sinkronisasi Version
-                    <small>Sinkron ringan version.json ke semua mirror lewat panel admin</small>
+                    <small>Atur key, timeout, dan eksekusi sinkron version.json</small>
+                </button>
+                <button class="menu-btn" data-target="panel-version-sync-servers" type="button">
+                    Server JSON Sync
+                    <small>Kelola daftar server khusus tujuan sinkron version.json</small>
                 </button>
             </nav>
 
@@ -1506,7 +1510,7 @@
 
             <section id="panel-version-sync" class="panel">
                 <h3>Sinkronisasi Version.json</h3>
-                <p class="panel-desc">Sinkron ringan tanpa CLI: daftar target otomatis mengikuti mirror server pada panel WEB.</p>
+                <p class="panel-desc">Panel ini khusus pengaturan key sinkron, timeout, dan eksekusi sinkron manual tanpa CLI.</p>
 
                 <article class="card" style="margin-top: 12px;">
                     <h4>Status Sinkronisasi</h4>
@@ -1520,7 +1524,7 @@
                             <input type="text" value="{{ $currentConfigVersion !== '' ? $currentConfigVersion : 'Belum ada' }}" readonly>
                         </div>
                         <div class="field">
-                            <label>Jumlah Target Mirror</label>
+                            <label>Jumlah Target Server JSON</label>
                             <input type="text" value="{{ count($versionSyncTargets) }} target" readonly>
                         </div>
                         <div class="field">
@@ -1531,9 +1535,14 @@
 
                     <div class="field" style="margin-top: 10px;">
                         <label>Daftar Target Sinkron</label>
-                        <textarea readonly>@if (count($versionSyncTargets) === 0)Tidak ada target mirror valid.@else@foreach($versionSyncTargets as $target)- {{ $target['name'] }} ({{ $target['host'] }})
+                        <textarea readonly>@if (count($versionSyncTargets) === 0)
+Tidak ada target mirror valid.
+@else
+@foreach($versionSyncTargets as $target)
+- {{ $target['name'] }} ({{ $target['host'] }})
 {{ $target['sync_endpoint'] }}
-@endforeach@endif</textarea>
+@endforeach
+@endif</textarea>
                     </div>
                 </article>
 
@@ -1543,7 +1552,7 @@
                         @csrf
                         <div class="field" style="display: flex; align-items: center; gap: 10px;">
                             <input id="version_sync_enabled" name="version_sync_enabled" type="checkbox" value="1" {{ $versionSyncSettings['enabled'] ? 'checked' : '' }} style="width: auto;">
-                            <label for="version_sync_enabled" style="margin: 0;">Aktifkan sinkronisasi otomatis version.json ke mirror server</label>
+                            <label for="version_sync_enabled" style="margin: 0;">Aktifkan sinkronisasi version.json ke daftar server JSON Sync</label>
                         </div>
 
                         <div class="field">
@@ -1581,7 +1590,27 @@
                     <form action="{{ route('cbt.version.sync.now') }}" method="post" style="margin-top: 10px;">
                         @csrf
                         <div class="btn-row">
-                            <button class="btn-soft" type="submit">Sinkronkan Sekarang ke Semua Mirror</button>
+                            <button class="btn-soft" type="submit">Sinkronkan Sekarang ke Semua Server JSON</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+
+            <section id="panel-version-sync-servers" class="panel">
+                <h3>Server JSON Sync</h3>
+                <p class="panel-desc">Panel ini terpisah dari server LB. Daftar server di sini hanya dipakai untuk sinkronisasi version.json.</p>
+
+                <article class="card" style="margin-top: 12px;">
+                    <h4>Daftar Server Tujuan Sinkron</h4>
+                    <p>Format per baris: <strong>Nama|URL</strong> atau langsung <strong>URL</strong>. Contoh: <em>Node 2|https://red2.example.sch.id</em>.</p>
+                    <form action="{{ route('cbt.version.sync.servers.update') }}" method="post">
+                        @csrf
+                        <div class="field">
+                            <label for="version_sync_servers_text">Daftar Server JSON Sync</label>
+                            <textarea id="version_sync_servers_text" name="version_sync_servers_text" rows="8" placeholder="Node 2|https://red2.example.sch.id&#10;Node 3|https://red3.example.sch.id">{{ old('version_sync_servers_text', $versionSyncServersText) }}</textarea>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn-primary" type="submit">Simpan Daftar Server JSON Sync</button>
                         </div>
                     </form>
                 </article>
