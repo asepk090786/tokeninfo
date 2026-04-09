@@ -23,14 +23,24 @@
 ### Quick way (recommended, no-ribet when replacing VPS)
 - Copy `scripts/lb/lb.env.example` to `scripts/lb/lb.env` on LB host.
 - Edit only `BACKEND_NODES` when VPS changes.
-- Apply in one command:
+- Dry-run first (preview config, no reload):
+
+```bash
+cd /path/to/repo/scripts/lb
+./apply-nginx-lb.sh ./lb.env --dry-run
+./apply-haproxy-lb.sh ./lb.env --dry-run
+```
+
+- Apply in one command (choose your LB):
 
 ```bash
 cd /path/to/repo/scripts/lb
 ./apply-nginx-lb.sh ./lb.env
+./apply-haproxy-lb.sh ./lb.env
 ```
 
-- This will generate config, run `nginx -t`, and reload nginx safely.
+- Nginx flow: generate config, run `nginx -t`, then reload nginx.
+- HAProxy flow: generate config, run `haproxy -c -f ...`, then reload haproxy.
 
 ## 4) App Config URLs (must remain single-domain)
 - `https://token.sman1pontang.biz.id/api/version.json`
