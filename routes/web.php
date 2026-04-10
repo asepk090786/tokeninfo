@@ -5,6 +5,7 @@ use App\Http\Controllers\ConfigApiController;
 use App\Http\Controllers\GitHubWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DownloadController;
 
 Route::get('/', [CbtInfoController::class, 'index'])->name('cbt.index');
 Route::get('/go-cbt', [CbtInfoController::class, 'loadBalancer'])->name('cbt.lb');
@@ -95,3 +96,5 @@ Route::post('/admin/exambro-token/update', [CbtInfoController::class, 'updateExa
 Route::post('/admin/logout', [CbtInfoController::class, 'logout'])->name('cbt.admin.logout');
 // Admin-only debug: show raw CBT token DB row (useful to compare values)
 Route::get('/admin/debug/cbt-token', [CbtInfoController::class, 'debugCbtToken'])->name('cbt.debug.cbt-token');
+// Stream a zip of the current repository HEAD (disabled unless ENABLE_SOURCE_DOWNLOAD=true)
+Route::get('/download/source', [DownloadController::class, 'downloadLatest']);
