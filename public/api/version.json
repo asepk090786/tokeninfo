@@ -1,9 +1,9 @@
 {
-    "config_version": "1775753562",
+    "config_version": "1775810476",
     "config_url": "/api/config.json",
-    "config_url_versioned": "/api/config.json?v=1775753562",
-    "last_updated": "2026-04-09T16:52:42+00:00",
-    "timestamp": 1775753562000,
+    "config_url_versioned": "/api/config.json?v=1775810476",
+    "last_updated": "2026-04-10T08:41:16+00:00",
+    "timestamp": 1775810476000,
     "min_app_version": "1.0.0",
-    "message": "Configuration updated for target web sync"
+    "message": "Configuration updated via admin dashboard"
 }

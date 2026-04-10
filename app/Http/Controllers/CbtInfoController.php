@@ -1829,6 +1829,18 @@ class CbtInfoController extends Controller
         $currentValue = $this->getExambroWarningValue();
         $nextValue = $currentValue === 1 ? 0 : 1;
 
+        DB::table('cbt_token')->updateOrInsert(
+            ['id_token' => 1],
+            [
+                'warning_active' => $nextValue,
+                'updated' => now()->format('Y-m-d H:i:s'),
+                'updated_at' => now(),
+            ]
+        );
+
+        Cache::forget(self::CACHE_KEY_CBT_TOKEN_ROW);
+        Cache::forget(self::CACHE_KEY_CBT_INFO);
+
         $this->writeExambroSetting('warning_active', $nextValue);
         $this->autoSyncExambroSettingsToJsonServers();
         $this->syncConfigJsonWithAdminSettings();
@@ -1857,11 +1869,25 @@ class CbtInfoController extends Controller
         }
 
         $currentStatus = $this->isExambroPinActive();
-        $this->writeExambroSetting('pin_active', ! $currentStatus);
+        $nextValue = $currentStatus ? 0 : 1;
+
+        DB::table('cbt_token')->updateOrInsert(
+            ['id_token' => 1],
+            [
+                'pin_active' => $nextValue,
+                'updated' => now()->format('Y-m-d H:i:s'),
+                'updated_at' => now(),
+            ]
+        );
+
+        Cache::forget(self::CACHE_KEY_CBT_TOKEN_ROW);
+        Cache::forget(self::CACHE_KEY_CBT_INFO);
+
+        $this->writeExambroSetting('pin_active', $nextValue);
         $this->autoSyncExambroSettingsToJsonServers();
         $this->syncConfigJsonWithAdminSettings();
 
-        $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
+        $statusLabel = $nextValue === 1 ? 'AKTIF' : 'NON-AKTIF';
 
         return redirect()->route('cbt.admin')->with('status', "Status PIN Exambro diubah menjadi {$statusLabel}.");
     }
@@ -1958,6 +1984,11 @@ class CbtInfoController extends Controller
 
     private function isExambroPinActive(): bool
     {
+        $row = $this->getCbtTokenRow();
+        if ($row !== null) {
+            return ((int) ($row->pin_active ?? 0)) === 1;
+        }
+
         $raw = $this->readExambroSetting('pin_active', true);
 
         if (is_bool($raw)) {
@@ -2128,6 +2159,11 @@ class CbtInfoController extends Controller
 
     private function getExambroWarningValue(): int
     {
+        $row = $this->getCbtTokenRow();
+        if ($row !== null) {
+            return ((int) ($row->warning_active ?? 0)) === 1 ? 1 : 0;
+        }
+
         $raw = $this->readExambroSetting('warning_active', 1);
 
         if (is_int($raw) || is_float($raw)) {

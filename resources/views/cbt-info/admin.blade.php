@@ -1479,7 +1479,7 @@ document.addEventListener('DOMContentLoaded', function(){ refreshPreviews(); });
                             @csrf
                             <div class="card" style="padding:10px; min-width:220px;">
                                 <h5 style="margin:0 0 8px 0;">Status Peringatan Exambro</h5>
-                                <div style="margin-bottom:8px;">Saat ini: <strong class="{{ $exambroWarningValue === 1 ? 'status-on' : 'status-off' }}">{{ $exambroWarningValue === 1 ? 'ON' : 'OFF' }}</strong></div>
+                                <div style="margin-bottom:8px;">Saat ini: <strong class="{{ $exambroWarningValue === 1 ? 'status-on' : 'status-off' }}">{{ $exambroWarningValue === 1 ? 'AKTIF' : 'NON-AKTIF' }}</strong></div>
                                 <div class="btn-row">
                                     <button class="btn-soft" type="submit">{{ $exambroWarningValue === 1 ? 'Matikan Peringatan' : 'Aktifkan Peringatan' }}</button>
                                 </div>
