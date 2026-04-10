@@ -18,17 +18,25 @@ class ConfigApiController extends Controller
      */
     public function getVersion(Request $request): Response
     {
-        $payload = $this->fetchVersionPayloadViaAppLb($request);
+        $payload = $this->getVersionPayloadFromHistory($request);
+        $source = 'history';
+
+        if ($payload === null) {
+            $payload = $this->fetchVersionPayloadViaAppLb($request);
+            $source = 'app_lb';
+        }
 
         if ($payload === null) {
             $payload = $this->syncVersionFileWithConfig($request);
+            $source = 'file';
+        }
 
-            if ($payload === null) {
-                return response()->json(['error' => 'Version file not found'], 404);
-            }
+        if ($payload === null) {
+            return response()->json(['error' => 'Version file not found'], 404);
         }
 
         if (is_array($payload)) {
+            Log::debug('Serving version payload.', ['source' => $source, 'config_version' => (string) Arr::get($payload, 'config_version', 'unknown')]);
             $configVersion = (string) Arr::get($payload, 'config_version', '1.0.0');
             $configBase = $this->resolveConfigBasePath($request);
             $payload['config_url'] = $request->getSchemeAndHttpHost() . $configBase . '/config.json';
@@ -54,7 +62,22 @@ class ConfigApiController extends Controller
      */
     public function getConfig(Request $request): Response
     {
-        $payload = $this->fetchConfigPayloadViaAppLb($request);
+        $payload = null;
+        $source = 'history';
+
+        if ($request->is('assets/app/config.json') && $request->query('apikey') !== null) {
+            $payload = $this->fetchConfigPayloadViaAppLb($request, '/' . ltrim($request->path(), '/'));
+            $source = 'app_lb';
+        }
+
+        if ($payload === null) {
+            $payload = $this->getConfigPayloadFromHistory();
+        }
+
+        if ($payload === null) {
+            $payload = $this->fetchConfigPayloadViaAppLb($request);
+            $source = 'app_lb';
+        }
 
         if ($payload === null) {
             $configFile = public_path('api/config.json');
@@ -65,9 +88,11 @@ class ConfigApiController extends Controller
 
             $content = file_get_contents($configFile);
             $payload = json_decode($content, true);
+            $source = 'file';
         }
 
         if (is_array($payload)) {
+            Log::debug('Serving config payload.', ['source' => $source, 'payload_size' => strlen(json_encode($payload))]);
             $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
             $payload['base_url'] = $baseUrl;
             $payload['exambro_page_url'] = $baseUrl . '/exambro';
@@ -208,12 +233,12 @@ class ConfigApiController extends Controller
         });
     }
 
-    private function fetchConfigPayloadViaAppLb(Request $request): ?array
+    private function fetchConfigPayloadViaAppLb(Request $request, string $path = '/api/config.json'): ?array
     {
         $versionTag = trim((string) $request->query('v', 'no-version'));
-        $cacheKey = 'config_api_lb:config_payload:' . sha1($versionTag);
+        $cacheKey = 'config_api_lb:config_payload:' . sha1($versionTag . '|' . $path);
 
-        return Cache::remember($cacheKey, now()->addSeconds(15), function () use ($request) {
+        return Cache::remember($cacheKey, now()->addSeconds(15), function () use ($request, $path) {
             $nodeBase = $this->selectNextNodeBaseUrl($request);
             if ($nodeBase === null) {
                 return null;
@@ -225,11 +250,15 @@ class ConfigApiController extends Controller
                 if ($requestedVersion !== '') {
                     $query['v'] = $requestedVersion;
                 }
+                if ($request->query('apikey') !== null) {
+                    $query['apikey'] = trim((string) $request->query('apikey'));
+                }
 
+                $url = rtrim($nodeBase, '/') . '/' . ltrim($path, '/');
                 $response = Http::connectTimeout(1)
                     ->timeout(2)
                     ->withHeaders(['Accept' => 'application/json'])
-                    ->get(rtrim($nodeBase, '/') . '/api/config.json', $query);
+                    ->get($url, $query);
 
                 if (! $response->successful()) {
                     return null;
@@ -241,11 +270,93 @@ class ConfigApiController extends Controller
             } catch (\Throwable $e) {
                 Log::warning('Failed to fetch config via app LB.', [
                     'node' => $nodeBase,
+                    'path' => $path,
                     'message' => $e->getMessage(),
                 ]);
 
                 return null;
             }
+        });
+    }
+
+    private function getConfigPayloadFromHistory(): ?array
+    {
+        $cacheKey = 'config_api:json_history:config_payload';
+        $ttl = now()->addSeconds(random_int(5, 60));
+
+        if (Cache::has($cacheKey)) {
+            Log::debug('Config payload cache hit for cbt_json_history.', ['cache_key' => $cacheKey]);
+        }
+
+        return Cache::remember($cacheKey, $ttl, function () use ($cacheKey) {
+            Log::debug('Config payload cache miss for cbt_json_history.', ['cache_key' => $cacheKey]);
+
+            try {
+                $row = DB::table('cbt_json_history')
+                    ->where('file_name', 'config.json')
+                    ->orderByDesc('created_at')
+                    ->first(['content']);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to read config payload from cbt_json_history.', [
+                    'message' => $e->getMessage(),
+                ]);
+
+                return null;
+            }
+
+            if (! $row || ! is_string($row->content)) {
+                Log::debug('No valid config.json row found in cbt_json_history.', ['cache_key' => $cacheKey]);
+                return null;
+            }
+
+            $payload = json_decode($row->content, true);
+            if (! is_array($payload)) {
+                Log::debug('Config payload from cbt_json_history is not valid JSON.', ['cache_key' => $cacheKey]);
+                return null;
+            }
+
+            Log::debug('Loaded config payload from cbt_json_history into Redis cache.', ['cache_key' => $cacheKey]);
+            return $payload;
+        });
+    }
+
+    private function getVersionPayloadFromHistory(Request $request): ?array
+    {
+        $cacheKey = 'config_api:json_history:version_payload';
+        $ttl = now()->addSeconds(random_int(5, 60));
+
+        if (Cache::has($cacheKey)) {
+            Log::debug('Version payload cache hit for cbt_json_history.', ['cache_key' => $cacheKey]);
+        }
+
+        return Cache::remember($cacheKey, $ttl, function () use ($request, $cacheKey) {
+            Log::debug('Version payload cache miss for cbt_json_history.', ['cache_key' => $cacheKey]);
+
+            $configPayload = $this->getConfigPayloadFromHistory();
+            if ($configPayload === null) {
+                Log::debug('Config payload empty when building version payload from history.', ['cache_key' => $cacheKey]);
+                return null;
+            }
+
+            $configVersion = trim((string) ($configPayload['current_version'] ?? $configPayload['version'] ?? ''));
+            if ($configVersion === '') {
+                Log::debug('Config version missing in history payload.', ['cache_key' => $cacheKey]);
+                return null;
+            }
+
+            $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
+            $payload = [
+                'config_version' => $configVersion,
+                'config_url' => $baseUrl . '/api/config.json',
+                'config_url_versioned' => $baseUrl . '/api/config.json?v=' . rawurlencode($configVersion),
+                'last_updated' => (string) ($configPayload['last_updated'] ?? now()->toIso8601String()),
+                'timestamp' => now()->timestamp * 1000,
+                'min_app_version' => (string) ($configPayload['min_app_version'] ?? '1.0.0'),
+                'message' => (string) ($configPayload['message'] ?? 'Configuration updated'),
+            ];
+
+            Log::debug('Loaded version payload from cbt_json_history into Redis cache.', ['cache_key' => $cacheKey, 'config_version' => $configVersion]);
+            return $payload;
         });
     }
 

@@ -980,62 +980,6 @@
                 <div class="admin-meta">Login: <strong>{{ $admin->name ?: $admin->username }}</strong></div>
             </section>
 
-<script>
-// Build preview URLs from LB URL, endpoint templates, and API key
-function buildPreviewUrl(lb, endpoint, apiKey) {
-    if (!endpoint) return '-';
-    endpoint = endpoint.trim();
-
-    // If endpoint is full URL
-    if (/^https?:\/\//i.test(endpoint)) {
-        if (endpoint.includes('{api_key}')) {
-            return endpoint.replace('{api_key}', encodeURIComponent(apiKey || ''));
-        }
-        var sep = endpoint.includes('?') ? '&' : '?';
-        return endpoint + sep + 'api_key=' + encodeURIComponent(apiKey || '');
-    }
-
-    // relative path
-    lb = (lb || '').trim();
-    if (!lb) {
-        return '(missing LB URL) ' + endpoint;
-    }
-    lb = lb.replace(/\/$/, '');
-    var path = '/' + endpoint.replace(/^\//, '');
-    var url = lb + path;
-    if (endpoint.includes('{api_key}')) {
-        return url.replace('{api_key}', encodeURIComponent(apiKey || ''));
-    }
-    var sep = url.includes('?') ? '&' : '?';
-    return url + sep + 'api_key=' + encodeURIComponent(apiKey || '');
-}
-
-function refreshPreviews() {
-    var lb = document.getElementById('load_balancer_url') ? document.getElementById('load_balancer_url').value : '';
-    var ep = document.getElementById('token_endpoint') ? document.getElementById('token_endpoint').value : '';
-    var epv = document.getElementById('token_version_endpoint') ? document.getElementById('token_version_endpoint').value : '';
-    var apiSrc = document.getElementById('api_key_source') ? document.getElementById('api_key_source').value : 'manual';
-    var apiManual = document.getElementById('api_key_manual') ? document.getElementById('api_key_manual').value : '';
-    var persisted = '{{ addslashes($exambro_api_key ?? '') }}';
-    var apiKey = apiSrc === 'db' ? persisted : apiManual;
-
-    var p1 = buildPreviewUrl(lb, ep, apiKey);
-    var p2 = buildPreviewUrl(lb, epv, apiKey);
-
-    document.getElementById('preview_token_url').textContent = p1;
-    document.getElementById('preview_token_version_url').textContent = p2;
-}
-
-['load_balancer_url','token_endpoint','token_version_endpoint','api_key_source','api_key_manual'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', refreshPreviews);
-    el.addEventListener('change', refreshPreviews);
-});
-
-document.addEventListener('DOMContentLoaded', function(){ refreshPreviews(); });
-</script>
-
             <nav class="menu" aria-label="Menu pengaturan admin">
                 <button class="menu-btn active" data-target="panel-web" type="button">
                     Pengaturan WEB
@@ -1057,10 +1001,9 @@ document.addEventListener('DOMContentLoaded', function(){ refreshPreviews(); });
             <div class="sidebar-actions">
                 <a class="link-btn btn-soft" href="{{ route('cbt.index') }}">Lihat Halaman Home</a>
                 <a class="link-btn btn-soft" href="{{ route('cbt.exambro.page') }}" target="_blank" rel="noopener noreferrer">Buka Halaman Exambro</a>
+                <a class="link-btn btn-soft" href="{{ route('config.file') }}" target="_blank" rel="noopener noreferrer">JSON Server</a>
                 @if ($loadBalancerLinkAvailable)
                     <a class="link-btn btn-soft" href="{{ route('cbt.lb') }}" target="_blank" rel="noopener noreferrer">Buka Link Load Balancing</a>
-                @else
-                    <span class="link-btn btn-soft" style="opacity:0.6; cursor:not-allowed;">Link Load Balancing aktif jika mirror valid lebih dari 1</span>
                 @endif
                 <!-- Sync Token from DB removed per request -->
             </div>
@@ -1323,58 +1266,17 @@ document.addEventListener('DOMContentLoaded', function(){ refreshPreviews(); });
                     <h4>Keterangan Halaman Home</h4>
                     <form action="{{ route('cbt.update') }}" method="post">
                         @csrf
-                        @php
-                            $serverOne = $servers[0] ?? null;
-                            $serverTwo = $servers[1] ?? null;
-                            $serverThree = $servers[2] ?? null;
-                        @endphp
-                        <input type="hidden" name="token" value="{{ $info->token }}">
-                        <input type="hidden" name="primary_url" value="{{ $serverOne['url'] ?? $info->cbt_url }}">
-                        <input type="hidden" name="backup_url_1" value="{{ $serverTwo['url'] ?? $info->cbt_backup_url_1 }}">
-                        <input type="hidden" name="backup_url_2" value="{{ $serverThree['url'] ?? $info->cbt_backup_url_2 }}">
-                        <input type="hidden" name="server_name_primary" value="{{ $serverOne['name'] ?? ($info->server_name_primary ?? 'Server Utama') }}">
-                        <input type="hidden" name="server_name_backup_1" value="{{ $serverTwo['name'] ?? ($info->server_name_backup_1 ?? 'Server 1') }}">
-                        <input type="hidden" name="server_name_backup_2" value="{{ $serverThree['name'] ?? ($info->server_name_backup_2 ?? 'Server 2') }}">
-                        <input type="hidden" name="primary_core" value="{{ $serverOne['core'] ?? ($info->server_primary_core ?? 4) }}">
-                        <input type="hidden" name="backup1_core" value="{{ $serverTwo['core'] ?? ($info->server_backup1_core ?? 4) }}">
-                        <input type="hidden" name="backup2_core" value="{{ $serverThree['core'] ?? ($info->server_backup2_core ?? 4) }}">
-                        <input type="hidden" name="primary_ram" value="{{ $serverOne['ram'] ?? ($info->server_primary_ram ?? '8 GB') }}">
-                        <input type="hidden" name="backup1_ram" value="{{ $serverTwo['ram'] ?? ($info->server_backup1_ram ?? '8 GB') }}">
-                        <input type="hidden" name="backup2_ram" value="{{ $serverThree['ram'] ?? ($info->server_backup2_ram ?? '8 GB') }}">
-                        <input type="hidden" name="primary_capacity" value="{{ $serverOne['capacity'] ?? ($info->server_primary_capacity ?? 40) }}">
-                        <input type="hidden" name="backup1_capacity" value="{{ $serverTwo['capacity'] ?? ($info->server_backup1_capacity ?? 40) }}">
-                        <input type="hidden" name="backup2_capacity" value="{{ $serverThree['capacity'] ?? ($info->server_backup2_capacity ?? 40) }}">
                         <div class="field">
                             <label for="description">Keterangan / Deskripsi Halaman</label>
                             <textarea id="description" name="description">{{ old('description', $info->description) }}</textarea>
-                        </div>
-                        <div class="field">
-                            <label for="load_balancer_url">Link Load Balancing (opsional)</label>
-                            <input id="load_balancer_url" name="load_balancer_url" type="url" maxlength="255" placeholder="https://your-loadbalancer.example/go-cbt" value="{{ old('load_balancer_url', $info->load_balancing_url ?? '') }}">
-                            <p style="margin:6px 0 0; color:var(--muted); font-size:0.88rem;">Jika dikosongkan sistem akan gunakan <code>/go-cbt</code> pada homepage.</p>
-                        </div>
-                        <div class="field">
-                            <label for="token_endpoint">Endpoint Token (relatif atau full URL)</label>
-                            <input id="token_endpoint" name="token_endpoint" type="text" maxlength="255" placeholder="/token.json atau https://node.example/token.json" value="{{ old('token_endpoint', $exambro_token_endpoint ?? '/token.json') }}">
-                            <p style="margin:6px 0 0; color:var(--muted); font-size:0.88rem;">Bisa berupa path relatif (digabung dengan LB URL) atau full URL. Gunakan <code>{api_key}</code> jika ingin menempatkan API key di posisi khusus (contoh: <code>https://node.example/token.json?api_key={api_key}</code>).</p>
-                        </div>
-                        <div class="field">
-                            <label for="token_version_endpoint">Endpoint Token versi (relatif atau full URL)</label>
-                            <input id="token_version_endpoint" name="token_version_endpoint" type="text" maxlength="255" placeholder="/version.token.json atau https://node.example/version.token.json" value="{{ old('token_version_endpoint', $exambro_token_version_endpoint ?? '/version.token.json') }}">
-                            <p style="margin:6px 0 0; color:var(--muted); font-size:0.88rem;">Contoh relativ: <code>/version.token.json</code>. Contoh penuh dengan placeholder: <code>https://node.example/version.token.json?api_key={api_key}</code>.</p>
-                        </div>
-
-                        <div class="field" style="margin-top:8px;">
-                            <label>Preview URL yang akan dipanggil</label>
-                            <div style="font-size:0.9rem; color:var(--muted); margin-top:6px;">
-                                <div>Token URL: <code id="preview_token_url">-</code></div>
-                                <div style="margin-top:6px;">Version Token URL: <code id="preview_token_version_url">-</code></div>
-                            </div>
                         </div>
                         <div class="btn-row">
                             <button class="btn-primary" type="submit">Simpan Keterangan</button>
                         </div>
                     </form>
+                </article>
+
+
                 </article>
             </section>
 

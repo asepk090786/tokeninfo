@@ -38,6 +38,12 @@ class CbtInfoController extends Controller
     {
         $info = $this->getInfoFromGarudaCbt();
         $servers = $this->buildServerList($info);
+        $eligibleCount = $this->countEligibleLoadBalancerServers($servers);
+
+        if ($eligibleCount <= 1) {
+            return redirect()->route('cbt.index');
+        }
+
         $selectedServer = $this->selectAvailableServer($servers);
         $targetUrl = trim((string) ($selectedServer['url'] ?? ''));
 
@@ -1505,6 +1511,7 @@ class CbtInfoController extends Controller
             'backup1_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'backup2_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'lb_target_server' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
             'load_balancer_url' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
             'token_endpoint' => ['nullable', 'string', 'max:255'],
             'token_version_endpoint' => ['nullable', 'string', 'max:255'],
@@ -1542,8 +1549,15 @@ class CbtInfoController extends Controller
             ]);
         }
 
-        if (array_key_exists('load_balancer_url', $validated)) {
-            $this->writePersistedSetting('cbt_load_balancing_url', trim((string) ($validated['load_balancer_url'] ?? '')) ?: $this->homepageUrl('/go-cbt'));
+        if (array_key_exists('load_balancer_url', $validated) || array_key_exists('lb_target_server', $validated)) {
+            $loadBalancerUrl = trim((string) ($validated['load_balancer_url'] ?? ''));
+            $targetServer = trim((string) ($validated['lb_target_server'] ?? ''));
+
+            if ($loadBalancerUrl === '' && $targetServer !== '') {
+                $loadBalancerUrl = rtrim($targetServer, '/') . '/go-cbt';
+            }
+
+            $this->writePersistedSetting('cbt_load_balancing_url', $loadBalancerUrl ?: $this->homepageUrl('/go-cbt'));
         }
         if (array_key_exists('token_endpoint', $validated)) {
             $this->writePersistedSetting('cbt_token_endpoint', trim((string) ($validated['token_endpoint'] ?? '')) ?: '/token.json');
