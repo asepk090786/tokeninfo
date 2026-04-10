@@ -32,6 +32,7 @@ class CbtInfoController extends Controller
     private const CACHE_KEY_CBT_INFO = 'cbt_info_payload';
     private const CACHE_KEY_CBT_TOKEN_ROW = 'cbt_token_row:id:1';
     private const CACHE_KEY_SETTING_ROW = 'setting_row:id:1';
+    private const CACHE_KEY_PIN_EXAMBRO_ROW = 'pin_exambro_row:id:1';
 
     public function loadBalancer(Request $request)
     {
@@ -94,15 +95,20 @@ class CbtInfoController extends Controller
 
     public function index(Request $request)
     {
+        // Version sync feature disabled — no automatic remote version checks
+
         if ($this->isExambroClient($request)) {
             return redirect()->route('cbt.exambro.page');
         }
 
         $info = $this->getInfoFromGarudaCbt();
         $exambroActive = $this->isExambroActive();
+        $exambroTokenSource = $this->getExambroTokenSource();
+        $pinActive = $this->isExambroPinActive();
+        $currentPinExambro = (string) ($this->getPinExambroRow()?->pin ?? '');
         $servers = $this->attachCachedQrCodes($this->buildServerList($info));
 
-        return view('cbt-info.index', compact('info', 'exambroActive', 'servers'));
+        return view('cbt-info.index', compact('info', 'exambroActive', 'exambroTokenSource', 'pinActive', 'currentPinExambro', 'servers'));
     }
 
     public function exambroPage()
@@ -120,14 +126,18 @@ class CbtInfoController extends Controller
 
     public function tokenInfo()
     {
+        // Do not call remote token/version endpoints from the public API.
+        // Return DB-driven values only to avoid external network calls.
         $info = $this->getInfoFromGarudaCbt();
         $exambroActive = $this->isExambroActive();
         $pinActive = $this->isExambroPinActive();
         $servers = $this->buildServerList($info);
 
+        $cbtToken = $this->readCbtTokenDirect();
+
         return $this->apiJson([
-            'token' => $info->cbt_token,
-            'cbt_token' => $info->cbt_token,
+            'token' => $cbtToken,
+            'cbt_token' => $cbtToken,
             'exambro_token' => $info->exambro_token,
             'exambro_active' => $exambroActive,
             'status_pin' => $pinActive ? 1 : 0,
@@ -143,6 +153,205 @@ class CbtInfoController extends Controller
             'description' => $info->description,
             'servers' => $servers,
         ]);
+    }
+
+    /**
+     * Check version token at most every 120 seconds; if remote version changed,
+     * fetch token.json and update local token and PIN accordingly.
+     */
+    private function ensureTokenSyncedFromVersion(): void
+    {
+        $lastCheckedKey = 'cbt_token_version_last_checked';
+        $lastChecked = Cache::get($lastCheckedKey);
+        $now = time();
+
+        if ($lastChecked && (is_int($lastChecked) && ($now - $lastChecked) < 120)) {
+            return; // checked recently
+        }
+
+        $lb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->homepageUrl('/go-cbt'));
+        $lb = rtrim($lb, '/');
+        $tokenVersionEndpoint = (string) $this->readPersistedSetting('cbt_token_version_endpoint', '/version.token.json');
+        $tokenEndpoint = (string) $this->readPersistedSetting('cbt_token_endpoint', '/token.json');
+        $apiKey = (string) $this->readPersistedSetting('cbt_exambro_api_key', '');
+
+        $build = function (string $base, string $path) use ($apiKey) {
+            $path = trim($path);
+            if ($path === '') return '';
+            if (preg_match('#^https?://#i', $path)) {
+                if (str_contains($path, '{api_key}')) {
+                    return str_replace('{api_key}', rawurlencode($apiKey), $path);
+                }
+                $sep = str_contains($path, '?') ? '&' : '?';
+                return $path . $sep . 'api_key=' . rawurlencode($apiKey);
+            }
+            $base = rtrim($base, '/');
+            $path = '/' . ltrim($path, '/');
+            $url = $base . $path;
+            if (str_contains($path, '{api_key}')) {
+                return str_replace('{api_key}', rawurlencode($apiKey), $url);
+            }
+            $sep = str_contains($url, '?') ? '&' : '?';
+            return $url . $sep . 'api_key=' . rawurlencode($apiKey);
+        };
+
+        $versionUrl = $build($lb, $tokenVersionEndpoint);
+        if ($versionUrl === '') {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        try {
+            $res = Http::connectTimeout(3)->timeout(5)->acceptJson()->get($versionUrl);
+        } catch (\Throwable $e) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        if (! $res->successful()) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        $json = null;
+        try {
+            $json = $res->json();
+        } catch (\Throwable $e) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        if (! is_array($json)) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        $remoteVersion = (string) ($json['version'] ?? $json['config_version'] ?? '');
+        if ($remoteVersion === '') {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        $cachedVersion = Cache::get('cbt_remote_version');
+
+        if ($cachedVersion === $remoteVersion) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return; // no change
+        }
+
+        // Version changed — fetch token.json
+        $tokenUrl = $build($lb, $tokenEndpoint);
+        if ($tokenUrl === '') {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        try {
+            $tres = Http::connectTimeout(3)->timeout(5)->acceptJson()->get($tokenUrl);
+        } catch (\Throwable $e) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        if (! $tres->successful()) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        $tjson = null;
+        try {
+            $tjson = $tres->json();
+        } catch (\Throwable $e) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        if (! is_array($tjson)) {
+            Cache::put($lastCheckedKey, $now, 120);
+            return;
+        }
+
+        $fetchedToken = (string) ($tjson['token'] ?? $tjson['cbt_token'] ?? $tjson['exambro_token'] ?? '');
+        $fetchedPin = isset($tjson['pin']) ? strtoupper(trim((string)$tjson['pin'])) : null;
+
+        if ($fetchedToken !== '') {
+            DB::table('cbt_token')->updateOrInsert(
+                ['id_token' => 1],
+                [
+                    'token' => strtoupper(trim($fetchedToken)),
+                    'updated' => now()->format('Y-m-d H:i:s'),
+                    'updated_at' => now(),
+                ]
+            );
+            Cache::forget(self::CACHE_KEY_CBT_TOKEN_ROW);
+        }
+
+            if ($fetchedPin !== null && $fetchedPin !== '') {
+            DB::table('pin_exambro')->updateOrInsert(
+                ['id' => 1],
+                [
+                    'pin' => $fetchedPin,
+                    'updated' => now()->format('Y-m-d H:i:s'),
+                ]
+            );
+            Cache::forget(self::CACHE_KEY_PIN_EXAMBRO_ROW);
+            // deprecated: no longer writing to public/pin.json here
+        }
+
+        // Update cached remote version and mark last checked
+        Cache::put('cbt_remote_version', $remoteVersion);
+        Cache::put($lastCheckedKey, $now, 120);
+        Cache::forget(self::CACHE_KEY_CBT_INFO);
+    }
+
+    /**
+     * Return current CBT token (from current info payload).
+            if ($request->has('server_name_primary')) {
+                $this->writePersistedSetting('cbt_server_name_primary', trim((string) ($validated['server_name_primary'] ?? '')) ?: 'Server Utama');
+            }
+
+            'status' => 'ok',
+            'token' => $info->cbt_token ?? $info->token ?? null,
+            'token_updated_at' => $info->token_updated_at ?? null,
+            'token_valid_until' => $info->token_valid_until ?? null,
+        ]);
+    }
+
+    /**
+     * Reset CBT token (admin only) and refresh cache.
+     */
+    public function resetCbtToken(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return $this->apiJson(['status' => 'error', 'message' => 'Unauthorized'], 403);
+        }
+
+        $newToken = strtoupper(Str::random(6));
+
+        $cbt = \App\Models\CbtInfo::first();
+        if ($cbt) {
+            $cbt->token = $newToken;
+            $cbt->token_updated_at = now()->toIso8601String();
+            // keep existing validity or set default 90 minutes
+            $cbt->token_valid_until = now()->addMinutes(90)->toIso8601String();
+            $cbt->save();
+        } else {
+            // ensure at least one row exists
+            \App\Models\CbtInfo::create([
+                'token' => $newToken,
+                'cbt_url' => '',
+                'description' => '',
+            ]);
+        }
+
+        // Clear cached payloads so other endpoints show the new token
+        Cache::forget(self::CACHE_KEY_CBT_INFO);
+        Cache::forget(self::CACHE_KEY_CBT_TOKEN_ROW);
+
+        // Log for audit
+        Log::info('CBT token reset by admin', ['new_token' => $newToken, 'ip' => request()->ip()]);
+
+        return $this->apiJson(['status' => 'ok', 'new_token' => $newToken]);
     }
 
     public function mirrorList()
@@ -194,8 +403,8 @@ class CbtInfoController extends Controller
             'status'            => 'ok',
             'token'             => $exambroTokenForExambroPage,
             'exambro_token'     => $exambroTokenForExambroPage,
-            'token_soal'        => $info->cbt_token,
-            'cbt_token'         => $info->cbt_token,
+            'token_soal'        => $this->readCbtTokenDirect(),
+            'cbt_token'         => $this->readCbtTokenDirect(),
             'exambro_active'    => $exambroActive,
             'show_exambro_token_on_page' => $showExambroTokenOnPage,
             'token_status'      => strtolower($tokenStatusLabel),
@@ -406,7 +615,8 @@ class CbtInfoController extends Controller
         $servers        = $this->buildServerList($info);
         $serverMap      = collect($servers)->keyBy('key');
         $recommended    = collect($servers)->first(function ($server) {
-            return (($server['is_up'] ?? false) === true) && ! empty($server['url']);
+            return (($server['is_up'] ?? false) === true)
+                && ! empty($server['url']);
         });
 
         $primary = $serverMap->get('primary', $servers[0] ?? []);
@@ -481,6 +691,17 @@ class CbtInfoController extends Controller
 
         $exambroToken        = $this->getExambroToken();
         $exambroTokenSource  = $this->getExambroTokenSource();
+        $exambro_api_key_source = (string) $this->readPersistedSetting('cbt_exambro_api_key_source', 'manual');
+        // If admin chooses to take API key from DB, read it from cbt_token.api_key
+        if ($exambro_api_key_source === 'db') {
+            $exambro_api_key = (string) (DB::table('cbt_token')->where('id_token', 1)->value('api_key') ?? '');
+        } else {
+            $exambro_api_key = (string) $this->readPersistedSetting('cbt_exambro_api_key', '');
+        }
+        $exambro_token_endpoint = (string) $this->readPersistedSetting('cbt_token_endpoint', '/token.json');
+        $exambro_token_version_endpoint = (string) $this->readPersistedSetting('cbt_token_version_endpoint', '/version.token.json');
+        $currentCbtToken = $this->readCbtTokenDirect();
+        $currentPinExambro = (string) ($this->getPinExambroRow()?->pin ?? '');
         $exambroEmergencyExitPin = $this->getExambroEmergencyExitPin();
         $exambroEmergencyExitPinSource = $this->hasPersistedExambroEmergencyExitPin() ? 'file' : 'env';
         $userAgentDetectionEnabled = $this->isUserAgentDetectionEnabled();
@@ -490,11 +711,21 @@ class CbtInfoController extends Controller
         $mirrorListUrl = url('api/mirror_list.json');
         $versionSyncSettings = $this->getVersionSyncSettings();
         $versionSyncServers = $this->getVersionSyncServers();
+
+        // If admin hasn't explicitly configured version sync servers, persist
+        // the default list derived from the mirror list so the textarea shows
+        // the same ordered list and can be edited going forward.
+        $rawVersionSyncStored = $this->readPersistedSetting('version_sync_servers', null);
+        if (($rawVersionSyncStored === null || $rawVersionSyncStored === []) && is_array($versionSyncServers) && $versionSyncServers !== []) {
+            $this->writePersistedSetting('version_sync_servers', $versionSyncServers);
+        }
+
         $versionSyncTargets = $this->collectVersionSyncTargets($versionSyncServers);
         $versionSyncServersText = $this->exportVersionSyncServersAsText($versionSyncServers);
         $versionData = $this->readVersionPayloadFromFile();
         $currentConfigVersion = trim((string) ($versionData['config_version'] ?? ''));
-        $redisConfig = $this->readRedisClusterConfig();
+        // Redis cluster config removed from admin view
+        $redisConfig = [];
 
         return view('cbt-info.admin', compact(
             'info',
@@ -502,6 +733,10 @@ class CbtInfoController extends Controller
             'admin',
             'servers',
             'exambroToken',
+            'exambro_api_key' ,
+            'exambro_api_key_source',
+            'exambro_token_endpoint',
+            'exambro_token_version_endpoint',
             'exambroTokenSource',
             'exambroEmergencyExitPin',
             'exambroEmergencyExitPinSource',
@@ -518,122 +753,10 @@ class CbtInfoController extends Controller
             'versionSyncTargets',
             'versionSyncServersText',
             'currentConfigVersion',
-            'redisConfig'
+            'redisConfig',
+            'currentCbtToken',
+            'currentPinExambro'
         ));
-    }
-
-    public function updateRedisConfig(Request $request)
-    {
-        if (! session('cbt_admin_auth')) {
-            return redirect()->route('cbt.admin.login');
-        }
-
-        $validated = $request->validate([
-            'redis_enabled'  => ['nullable', 'in:0,1'],
-            'redis_host'     => ['nullable', 'string', 'max:253'],
-            'redis_port'     => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'redis_password' => ['nullable', 'string', 'max:256'],
-            'redis_prefix'   => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_\-]*$/'],
-        ]);
-
-        $enabled  = ($validated['redis_enabled'] ?? '0') === '1';
-        $host     = trim((string) ($validated['redis_host'] ?? '127.0.0.1'));
-        $port     = max(1, min(65535, (int) ($validated['redis_port'] ?? 6379)));
-        $password = trim((string) ($validated['redis_password'] ?? ''));
-        $prefix   = trim((string) ($validated['redis_prefix'] ?? 'tokeninfo_'));
-
-        $config = [
-            'enabled'  => $enabled,
-            'host'     => $host !== '' ? $host : '127.0.0.1',
-            'port'     => $port,
-            'password' => $password,
-            'prefix'   => $prefix !== '' ? $prefix : 'tokeninfo_',
-            'updated_at' => now()->toIso8601String(),
-        ];
-
-        $this->writeRedisClusterConfig($config);
-
-        return redirect('/admin/cbt-info#panel-redis-cluster')
-            ->with('status', 'Konfigurasi Redis Cluster berhasil disimpan. Reload halaman untuk menerapkan.');
-    }
-
-    public function testRedisConnection(Request $request)
-    {
-        if (! session('cbt_admin_auth')) {
-            return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
-        }
-
-        $host     = trim((string) $request->input('host', '127.0.0.1'));
-        $port     = max(1, min(65535, (int) $request->input('port', 6379)));
-        $password = trim((string) $request->input('password', ''));
-
-        if ($host === '') {
-            return response()->json(['status' => 'error', 'message' => 'Host tidak boleh kosong.']);
-        }
-
-        try {
-            $client = new \Redis();
-            $connected = @$client->connect($host, $port, 3);
-
-            if (! $connected) {
-                return response()->json(['status' => 'error', 'message' => "Gagal konek ke {$host}:{$port}." ]);
-            }
-
-            if ($password !== '') {
-                $auth = $client->auth($password);
-                if (! $auth) {
-                    $client->close();
-                    return response()->json(['status' => 'error', 'message' => 'Password Redis salah.']);
-                }
-            }
-
-            $ping = $client->ping('hello');
-            $client->close();
-
-            if ($ping === 'hello' || $ping === true || $ping === '+PONG') {
-                return response()->json([
-                    'status'  => 'ok',
-                    'message' => "Koneksi ke {$host}:{$port} berhasil. Redis siap digunakan.",
-                ]);
-            }
-
-            return response()->json(['status' => 'error', 'message' => 'Tidak dapat PING ke Redis.']);
-        } catch (\Throwable $e) {
-            return response()->json(['status' => 'error', 'message' => 'Error: ' . $e->getMessage()]);
-        }
-    }
-
-    private function redisClusterConfigFilePath(): string
-    {
-        return storage_path('app/private/redis-cluster.json');
-    }
-
-    private function readRedisClusterConfig(): array
-    {
-        $path = $this->redisClusterConfigFilePath();
-
-        if (! file_exists($path)) {
-            return [
-                'enabled'  => false,
-                'host'     => '127.0.0.1',
-                'port'     => 6379,
-                'password' => '',
-                'prefix'   => 'tokeninfo_',
-            ];
-        }
-
-        $decoded = json_decode((string) file_get_contents($path), true);
-        if (! is_array($decoded)) {
-            return ['enabled' => false, 'host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'prefix' => 'tokeninfo_'];
-        }
-
-        return [
-            'enabled'  => (bool) ($decoded['enabled'] ?? false),
-            'host'     => (string) ($decoded['host'] ?? '127.0.0.1'),
-            'port'     => (int) ($decoded['port'] ?? 6379),
-            'password' => (string) ($decoded['password'] ?? ''),
-            'prefix'   => (string) ($decoded['prefix'] ?? 'tokeninfo_'),
-        ];
     }
 
     private function writeRedisClusterConfig(array $config): void
@@ -663,8 +786,8 @@ class CbtInfoController extends Controller
         $servers = $this->parseVersionSyncServersText($rawText);
         $this->writePersistedSetting('version_sync_servers', $servers);
 
-        return redirect('/admin/cbt-info#panel-version-sync-servers')
-            ->with('status', 'Daftar server sinkron version.json berhasil diperbarui.');
+          return redirect('/admin/cbt-info')
+              ->with('status', 'Daftar server sinkron version.json berhasil diperbarui.'); 
     }
 
     public function updateVersionSyncSettings(Request $request)
@@ -687,8 +810,8 @@ class CbtInfoController extends Controller
         $this->writePersistedSetting('version_sync_key', $syncKey);
         $this->writePersistedSetting('version_sync_timeout_seconds', max(1, min($timeoutSeconds, 5)));
 
-        return redirect('/admin/cbt-info#panel-version-sync')
-            ->with('status', 'Pengaturan sinkronisasi version.json berhasil diperbarui.');
+          return redirect('/admin/cbt-info')
+              ->with('status', 'Pengaturan sinkronisasi version.json berhasil diperbarui.'); 
     }
 
     public function syncVersionNow(Request $request)
@@ -699,25 +822,25 @@ class CbtInfoController extends Controller
 
         $settings = $this->getVersionSyncSettings();
         if (! $settings['enabled']) {
-            return redirect('/admin/cbt-info#panel-version-sync')
-                ->withErrors(['version_sync' => 'Sinkronisasi belum diaktifkan. Aktifkan dulu pada panel Version Sync.']);
+            return redirect('/admin/cbt-info')
+                ->withErrors(['version_sync' => 'Sinkronisasi belum diaktifkan. Aktifkan dulu pada panel Version Sync.']); 
         }
 
         if ($settings['key'] === '') {
-            return redirect('/admin/cbt-info#panel-version-sync')
+            return redirect('/admin/cbt-info')
                 ->withErrors(['version_sync' => 'Sync Key kosong. Isi Sync Key terlebih dahulu.']);
         }
 
         $payload = $this->readVersionPayloadFromFile();
         if ($payload === []) {
-            return redirect('/admin/cbt-info#panel-version-sync')
+            return redirect('/admin/cbt-info')
                 ->withErrors(['version_sync' => 'File version.json tidak valid atau tidak ditemukan.']);
         }
 
         $targets = $this->collectVersionSyncTargets($this->getVersionSyncServers());
 
         if ($targets === []) {
-            return redirect('/admin/cbt-info#panel-version-sync')
+            return redirect('/admin/cbt-info')
                 ->withErrors(['version_sync' => 'Tidak ada target mirror valid untuk sinkronisasi.']);
         }
 
@@ -758,13 +881,13 @@ class CbtInfoController extends Controller
 
         $targetCount = count($targets);
         if ($successCount === $targetCount) {
-            return redirect('/admin/cbt-info#panel-version-sync')
+            return redirect('/admin/cbt-info')
                 ->with('status', "Sinkronisasi version.json berhasil ke {$successCount}/{$targetCount} server JSON.");
         }
 
         $failedLabel = implode(', ', array_slice($failedHosts, 0, 5));
 
-        return redirect('/admin/cbt-info#panel-version-sync')
+        return redirect('/admin/cbt-info')
             ->withErrors([
                 'version_sync' => "Sinkronisasi parsial: berhasil {$successCount}/{$targetCount}. Gagal: {$failedLabel}",
             ]);
@@ -937,7 +1060,7 @@ class CbtInfoController extends Controller
         $this->writeExambroSetting('user_agent_patterns', implode("\n", $patterns));
 
         return redirect('/admin/cbt-info#panel-user-agent')
-            ->with('status', 'Pengaturan User-Agent berhasil diperbarui.');
+              ->with('status', 'Pengaturan User-Agent berhasil diperbarui.'); 
     }
 
     public function updateExambroEmergencyExitPin(Request $request)
@@ -953,8 +1076,8 @@ class CbtInfoController extends Controller
         $pin = trim((string) $validated['exambro_exit_emergency_pin']);
         $this->writeExambroSetting('exit_emergency_pin', $pin);
 
-        return redirect('/admin/cbt-info#panel-token-pin')
-            ->with('status', 'PIN darurat Exit Exambro berhasil diperbarui.');
+          return redirect('/admin/cbt-info#panel-exambro-settings')
+              ->with('status', 'PIN darurat Exit Exambro berhasil diperbarui.'); 
     }
 
     public function showLogin()
@@ -1020,6 +1143,16 @@ class CbtInfoController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('cbt.admin.login')->with('status', 'Anda sudah logout dari panel admin.');
+    }
+
+    public function debugCbtToken(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $row = DB::table('cbt_token')->where('id_token', 1)->first();
+        return response()->json([ 'db_row' => $row ]);
     }
 
     public function updateServerSettings(Request $request, string $key)
@@ -1372,48 +1505,12 @@ class CbtInfoController extends Controller
             'backup1_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'backup2_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'load_balancer_url' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
+            'token_endpoint' => ['nullable', 'string', 'max:255'],
+            'token_version_endpoint' => ['nullable', 'string', 'max:255'],
         ]);
 
-        DB::table('cbt_token')->updateOrInsert(
-            ['id_token' => 1],
-            [
-                'token' => strtoupper($validated['token']),
-                'auto' => 0,
-                'jarak' => 0,
-                'updated' => now()->format('Y-m-d H:i:s'),
-            ]
-        );
-
-        if (! empty($validated['primary_url'])) {
-            DB::table('setting')->updateOrInsert(
-                ['id_setting' => 1],
-                [
-                    'web' => $validated['primary_url'],
-                    'sekolah' => 'GARUDA CBT',
-                    'nama_aplikasi' => 'GARUDA CBT',
-                ]
-            );
-        }
-
-        if (! empty($validated['backup_url_1'])) {
-            $this->writePersistedSetting('cbt_backup_url_1', $validated['backup_url_1']);
-        }
-
-        if (! empty($validated['backup_url_2'])) {
-            $this->writePersistedSetting('cbt_backup_url_2', $validated['backup_url_2']);
-        }
-
-        if ($request->has('server_name_primary')) {
-            $this->writePersistedSetting('cbt_server_name_primary', trim((string) ($validated['server_name_primary'] ?? '')) ?: 'Server Utama');
-        }
-
-        if ($request->has('server_name_backup_1')) {
-            $this->writePersistedSetting('cbt_server_name_backup_1', trim((string) ($validated['server_name_backup_1'] ?? '')) ?: 'Server 1');
-        }
-
-        if ($request->has('server_name_backup_2')) {
-            $this->writePersistedSetting('cbt_server_name_backup_2', trim((string) ($validated['server_name_backup_2'] ?? '')) ?: 'Server 2');
-        }
+        // Token update and related server URL/name writes removed per request.
 
         $this->writePersistedSetting('cbt_server_spec_primary_core', (int) ($validated['primary_core'] ?? 4));
         $this->writePersistedSetting('cbt_server_spec_backup1_core', (int) ($validated['backup1_core'] ?? 4));
@@ -1445,25 +1542,240 @@ class CbtInfoController extends Controller
             ]);
         }
 
+        if (array_key_exists('load_balancer_url', $validated)) {
+            $this->writePersistedSetting('cbt_load_balancing_url', trim((string) ($validated['load_balancer_url'] ?? '')) ?: $this->homepageUrl('/go-cbt'));
+        }
+        if (array_key_exists('token_endpoint', $validated)) {
+            $this->writePersistedSetting('cbt_token_endpoint', trim((string) ($validated['token_endpoint'] ?? '')) ?: '/token.json');
+        }
+        if (array_key_exists('token_version_endpoint', $validated)) {
+            $this->writePersistedSetting('cbt_token_version_endpoint', trim((string) ($validated['token_version_endpoint'] ?? '')) ?: '/version.token.json');
+        }
+
         $this->invalidateInfoCaches();
 
         return redirect()->route('cbt.admin')->with('status', 'Informasi CBT berhasil diperbarui.');
     }
 
-    public function flushCache(Request $request)
+    public function updatePinExambro(Request $request)
     {
         if (! session('cbt_admin_auth')) {
-            return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'pin_exambro' => ['required', 'string', 'min:4', 'max:20', 'regex:/^[A-Za-z0-9_-]+$/'],
+        ]);
+
+        $pin = strtoupper(trim((string) $validated['pin_exambro']));
+        
+        // Update PIN di tabel pin_exambro
+        DB::table('pin_exambro')->updateOrInsert(
+            ['id' => 1],
+            [
+                'pin' => $pin,
+                'updated' => now()->format('Y-m-d H:i:s'),
+            ]
+        );
+
+        // Invalidate cache untuk PIN Exambro
+        Cache::forget(self::CACHE_KEY_PIN_EXAMBRO_ROW);
+        Cache::forget(self::CACHE_KEY_CBT_INFO);
+
+        // No longer writing to public/pin.json from server; rely on DB as authoritative source.
+
+        return redirect()->route('cbt.admin')->with('status', 'PIN Exambro berhasil diperbarui di database.');
+    }
+
+    public function fetchExambroTokenFromLb(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'api_key_source' => ['nullable', 'in:manual,db'],
+            'api_key_manual' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $source = $validated['api_key_source'] ?? (string) $this->readPersistedSetting('cbt_exambro_api_key_source', 'manual');
+        $apiKey = '';
+
+        if ($source === 'db') {
+            // When selecting DB as source for API key, read from cbt_token.api_key
+            $apiKey = (string) (DB::table('cbt_token')->where('id_token', 1)->value('api_key') ?? '');
+        } else {
+            $apiKey = trim((string) ($validated['api_key_manual'] ?? ''));
+            // persist manual key so admin doesn't need to retype
+            if ($apiKey !== '') {
+                $this->writePersistedSetting('cbt_exambro_api_key', $apiKey);
+                $this->writePersistedSetting('cbt_exambro_api_key_source', 'manual');
+            }
+        }
+
+        // If no API key available, error
+        if ($apiKey === '') {
+            return redirect()->route('cbt.admin')->withErrors(['api_key' => 'API key tidak ditemukan. Isi manual atau pilih sumber DB.']);
+        }
+
+        // Get LB base URL
+        $lb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->homepageUrl('/go-cbt'));
+        $lb = rtrim($lb, '/');
+
+        $tokenEndpoint = (string) $this->readPersistedSetting('cbt_token_endpoint', '/token.json');
+        $tokenVersionEndpoint = (string) $this->readPersistedSetting('cbt_token_version_endpoint', '/version.token.json');
+
+        $buildUrl = function (string $base, string $path) use ($apiKey) {
+            $path = trim($path);
+            if ($path === '') {
+                return '';
+            }
+
+            // If path already looks like a full URL, use it directly (supports {api_key} placeholder)
+            if (preg_match('#^https?://#i', $path)) {
+                if (str_contains($path, '{api_key}')) {
+                    return str_replace('{api_key}', rawurlencode($apiKey), $path);
+                }
+
+                $sep = str_contains($path, '?') ? '&' : '?';
+                return $path . $sep . 'api_key=' . rawurlencode($apiKey);
+            }
+
+            // If path contains placeholder {api_key}, build base+path then replace
+            $base = rtrim($base, '/');
+            $path = '/' . ltrim($path, '/');
+            $url = $base . $path;
+
+            if (str_contains($path, '{api_key}')) {
+                return str_replace('{api_key}', rawurlencode($apiKey), $url);
+            }
+
+            $sep = str_contains($url, '?') ? '&' : '?';
+            return $url . $sep . 'api_key=' . rawurlencode($apiKey);
+        };
+
+        $candidates = [];
+        if ($tokenEndpoint !== '') {
+            $candidates[] = $buildUrl($lb, $tokenEndpoint);
+        }
+        if ($tokenVersionEndpoint !== '') {
+            $candidates[] = $buildUrl($lb, $tokenVersionEndpoint);
+        }
+
+        $found = false;
+        $fetchedToken = '';
+        $fetchedPin = null;
+
+        foreach ($candidates as $url) {
+            try {
+                $res = Http::connectTimeout(3)->timeout(5)->acceptJson()->get($url);
+            } catch (\Throwable $e) {
+                continue;
+            }
+
+            if (! $res->successful()) {
+                continue;
+            }
+
+            $json = null;
+            try {
+                $json = $res->json();
+            } catch (\Throwable $e) {
+                $json = null;
+            }
+
+            if (! is_array($json)) {
+                continue;
+            }
+
+            // Accept fields: token, cbt_token, pin, exambro_token
+            if (! empty($json['token'] ?? $json['cbt_token'] ?? $json['exambro_token'] ?? null)) {
+                $fetchedToken = strtoupper(trim((string) ($json['token'] ?? $json['cbt_token'] ?? $json['exambro_token'])));
+            }
+
+            if (! empty($json['pin'] ?? null)) {
+                $fetchedPin = strtoupper(trim((string) $json['pin']));
+            }
+
+            if ($fetchedToken !== '' || $fetchedPin !== null) {
+                $found = true;
+                break;
+            }
+        }
+
+        if (! $found) {
+            return redirect()->route('cbt.admin')->withErrors(['fetch' => 'Gagal mengambil token dari LB endpoint. Pastikan URL LB dan API key benar.']);
+        }
+
+        // Persist token to DB if found
+        if ($fetchedToken !== '') {
+            DB::table('cbt_token')->updateOrInsert(
+                ['id_token' => 1],
+                [
+                    'token' => $fetchedToken,
+                    'jarak' => DB::raw('jarak'),
+                    'updated' => now()->format('Y-m-d H:i:s'),
+                    'updated_at' => now(),
+                ]
+            );
+            Cache::forget(self::CACHE_KEY_CBT_TOKEN_ROW);
+        }
+
+        // Persist PIN if provided
+        if ($fetchedPin !== null) {
+            DB::table('pin_exambro')->updateOrInsert(
+                ['id' => 1],
+                [
+                    'pin' => $fetchedPin,
+                    'updated' => now()->format('Y-m-d H:i:s'),
+                ]
+            );
+            Cache::forget(self::CACHE_KEY_PIN_EXAMBRO_ROW);
+
+            // no longer writing public/pin.json here; DB is authoritative
         }
 
         $this->invalidateInfoCaches();
 
-        return response()->json([
-            'status'     => 'ok',
-            'message'    => 'Cache berhasil di-refresh dari database.',
-            'flushed_at' => now()->toIso8601String(),
-        ]);
+        $msg = 'Sinkronisasi token';
+        if ($fetchedToken !== '') {
+            $msg .= " berhasil (token: {$fetchedToken})";
+        }
+        if ($fetchedPin !== null) {
+            $msg .= " dan PIN diperbarui";
+        }
+
+        return redirect()->route('cbt.admin')->with('status', $msg . '.');
     }
+
+    public function updateExambroTokenFromAdmin(Request $request)
+    {
+        if (! session('cbt_admin_auth')) {
+            return redirect()->route('cbt.admin.login');
+        }
+
+        $validated = $request->validate([
+            'token_manual' => ['required', 'string', 'max:32'],
+        ]);
+
+        $token = strtoupper(trim((string) ($validated['token_manual'] ?? '')));
+
+        DB::table('cbt_token')->updateOrInsert(
+            ['id_token' => 1],
+            [
+                'token' => $token,
+                'updated' => now()->format('Y-m-d H:i:s'),
+                'updated_at' => now(),
+            ]
+        );
+
+        Cache::forget(self::CACHE_KEY_CBT_TOKEN_ROW);
+        Cache::forget(self::CACHE_KEY_CBT_INFO);
+
+        return redirect()->route('cbt.admin')->with('status', 'Token CBT berhasil diperbarui.');
+    }
+
+    // flushCache removed — feature deprecated/disabled
 
     public function toggleExambro(Request $request)
     {
@@ -1473,6 +1785,7 @@ class CbtInfoController extends Controller
 
         $currentStatus = $this->isExambroActive();
         $this->writeExambroSetting('token_active', ! $currentStatus);
+        $this->syncConfigJsonWithAdminSettings();
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
@@ -1502,6 +1815,7 @@ class CbtInfoController extends Controller
 
         $this->storeExambroToken($newToken);
         $this->autoSyncExambroSettingsToJsonServers();
+        $this->syncConfigJsonWithAdminSettings();
 
         return redirect()->route('cbt.admin')->with('status', 'PIN Exambro berhasil digenerate dan dipisahkan dari token soal.');
     }
@@ -1517,6 +1831,7 @@ class CbtInfoController extends Controller
 
         $this->writeExambroSetting('warning_active', $nextValue);
         $this->autoSyncExambroSettingsToJsonServers();
+        $this->syncConfigJsonWithAdminSettings();
 
         return redirect()->route('cbt.admin')->with('status', 'Pengaturan peringatan Exambro diubah menjadi ' . ($nextValue === 1 ? 'ON (1)' : 'OFF (0)') . '.');
     }
@@ -1544,6 +1859,7 @@ class CbtInfoController extends Controller
         $currentStatus = $this->isExambroPinActive();
         $this->writeExambroSetting('pin_active', ! $currentStatus);
         $this->autoSyncExambroSettingsToJsonServers();
+        $this->syncConfigJsonWithAdminSettings();
 
         $statusLabel = ! $currentStatus ? 'AKTIF' : 'NON-AKTIF';
 
@@ -1683,28 +1999,24 @@ class CbtInfoController extends Controller
 
     private function getExambroToken(): string
     {
-        $persistedToken = strtoupper(trim((string) $this->readExambroSetting('token', '')));
-        if ($persistedToken !== '') {
-            return $persistedToken;
+        // Always read Exambro token (PIN) from database table `pin_exambro`.
+        $pinRow = $this->getPinExambroRow();
+        if ($pinRow && ! empty($pinRow->pin)) {
+            return strtoupper(trim((string) $pinRow->pin));
         }
 
-        $fileToken = $this->readExambroTokenFromFile();
-        if ($fileToken !== '') {
-            $this->writeExambroSetting('token', $fileToken);
-
-            return $fileToken;
-        }
-
-        return strtoupper((string) config('app.exambro_token_pin', ''));
+        // If not present, return empty string — do not fall back to files or env.
+        return '';
     }
 
     private function getExambroTokenSource(): string
     {
-        if (trim((string) $this->readExambroSetting('token', '')) !== '') {
-            return 'file';
+        $pinRow = $this->getPinExambroRow();
+        if ($pinRow && ! empty($pinRow->pin)) {
+            return 'database';
         }
 
-        return $this->readExambroTokenFromFile() !== '' ? 'web' : 'env';
+        return 'unset';
     }
 
     private function exambroTokenFilePath(): string
@@ -1895,6 +2207,7 @@ class CbtInfoController extends Controller
                     'server_backup2_capacity' => max(1, (int) $this->readPersistedSetting('cbt_server_capacity_backup2', (int) ($persistentServerMeta['server_backup2_capacity'] ?? 40))),
                     'description' => $settingData?->alamat ?? 'Silakan perbarui token dan URL CBT melalui halaman admin.',
                     'school' => $settingData?->sekolah ?? 'GARUDA CBT',
+                    'load_balancing_url' => (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->homepageUrl('/go-cbt')),
                     'app_name' => $settingData?->nama_aplikasi ?? 'GARUDA CBT',
                     'token_updated_at' => $tokenUpdatedAt ? now()->parse($tokenUpdatedAt)->format('d-m-Y H:i:s') : null,
                     'token_valid_until' => $tokenValidUntil,
@@ -1916,6 +2229,18 @@ class CbtInfoController extends Controller
         );
     }
 
+    /**
+     * Read CBT token directly from database (bypass controller-level cache).
+     */
+    private function readCbtTokenDirect(): string
+    {
+        $row = DB::table('cbt_token')->where('id_token', 1)->first();
+
+        return strtoupper((string) ($row->token ?? 'BELUM-DISET'));
+    }
+
+    // writePinJsonFromDb removed — writing to public/pin.json is deprecated.
+
     private function getSettingRow(): ?object
     {
         return Cache::remember(
@@ -1923,6 +2248,17 @@ class CbtInfoController extends Controller
             now()->addSeconds($this->dbRefreshIntervalSeconds()),
             function () {
                 return DB::table('setting')->where('id_setting', 1)->first();
+            }
+        );
+    }
+
+    private function getPinExambroRow(): ?object
+    {
+        return Cache::remember(
+            self::CACHE_KEY_PIN_EXAMBRO_ROW,
+            now()->addSeconds($this->dbRefreshIntervalSeconds()),
+            function () {
+                return DB::table('pin_exambro')->where('id', 1)->first();
             }
         );
     }
@@ -2996,6 +3332,45 @@ class CbtInfoController extends Controller
         File::put($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
+    private function syncConfigJsonWithAdminSettings(): void
+    {
+        $configPath = public_path('api/config.json');
+        $config = [];
+
+        if (File::exists($configPath)) {
+            $config = json_decode(File::get($configPath), true);
+        }
+
+        if (! is_array($config)) {
+            $config = [];
+        }
+
+        $config['status_token'] = $this->isExambroActive();
+        $config['status_pin'] = $this->isExambroPinActive();
+        $config['warning_audio_enabled'] = $this->getExambroWarningValue() === 1;
+
+        $version = (string) now()->timestamp;
+        $config['version'] = $version;
+
+        if (! File::isDirectory(dirname($configPath))) {
+            File::makeDirectory(dirname($configPath), 0755, true);
+        }
+
+        File::put($configPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        $versionPayload = [
+            'config_version' => $version,
+            'config_url' => '/api/config.json',
+            'config_url_versioned' => '/api/config.json?v=' . rawurlencode($version),
+            'last_updated' => now()->toIso8601String(),
+            'timestamp' => now()->timestamp * 1000,
+            'min_app_version' => trim((string) ($currentVersionPayload['min_app_version'] ?? '1.0.0')),
+            'message' => trim((string) ($currentVersionPayload['message'] ?? 'Configuration updated via admin dashboard')),
+        ];
+
+        $this->writeVersionPayloadToFile($versionPayload);
+    }
+
     private function getVersionSyncSettings(): array
     {
         $enabledRaw = $this->readPersistedSetting('version_sync_enabled', 0);
@@ -3015,6 +3390,23 @@ class CbtInfoController extends Controller
 
         if (! is_array($stored)) {
             return [];
+        }
+
+        // If admin hasn't configured any version sync servers yet,
+        // default the list to the configured mirror servers (preserve order).
+        if ($stored === [] || $stored === null) {
+            $mirrors = $this->readMirrorListFromFile();
+            if (is_array($mirrors) && $mirrors !== []) {
+                $mapped = [];
+                foreach ($mirrors as $m) {
+                    $mapped[] = [
+                        'name' => (string) ($m['name'] ?? ($m['key'] ?? 'Server')),
+                        'url' => (string) ($m['url'] ?? ''),
+                    ];
+                }
+
+                return $this->normalizeVersionSyncServers($mapped);
+            }
         }
 
         return $this->normalizeVersionSyncServers($stored);
@@ -3262,7 +3654,9 @@ class CbtInfoController extends Controller
     {
         $normalized = $this->normalizeConfiguredServers($servers);
         $eligibleMirrorCount = $this->countEligibleLoadBalancerServers($normalized);
-        $loadBalancingUrl = $eligibleMirrorCount > 1 ? $this->homepageUrl('/go-cbt') : null;
+        $defaultLb = $this->homepageUrl('/go-cbt');
+        $configuredLb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $defaultLb);
+        $loadBalancingUrl = $eligibleMirrorCount > 1 ? $configuredLb : null;
 
         return [
             'generated_at' => now()->toIso8601String(),

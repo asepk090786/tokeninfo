@@ -303,8 +303,8 @@
         .server-grid {
             margin-top: 12px;
             display: grid;
-            gap: 8px;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         }
 
         .server-item {
@@ -313,6 +313,27 @@
             padding: 10px;
             background: #fff;
         }
+
+        /* New svr-grid and card styles to tidy admin panel */
+        .svr-section { margin-top: 12px; }
+        .svr-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+        .svr-card-new {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .svr-card-head { display:flex; justify-content:space-between; align-items:center; }
+        .svr-card-body { margin-top: 12px; }
+        .svr-card-input { width:100%; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+        .svr-card-primary-actions { display:flex; gap:8px; margin-top:10px; }
+        .svr-action-btn { flex:1; padding:8px 10px; border-radius:8px; border:0; cursor:pointer; }
+        .btn-save-changes { background:#0f766e; color:#fff; }
+        .btn-deactivate-hide { background:#f1f5f9; }
 
         .server-item .name {
             margin: 0;
@@ -959,31 +980,78 @@
                 <div class="admin-meta">Login: <strong>{{ $admin->name ?: $admin->username }}</strong></div>
             </section>
 
+<script>
+// Build preview URLs from LB URL, endpoint templates, and API key
+function buildPreviewUrl(lb, endpoint, apiKey) {
+    if (!endpoint) return '-';
+    endpoint = endpoint.trim();
+
+    // If endpoint is full URL
+    if (/^https?:\/\//i.test(endpoint)) {
+        if (endpoint.includes('{api_key}')) {
+            return endpoint.replace('{api_key}', encodeURIComponent(apiKey || ''));
+        }
+        var sep = endpoint.includes('?') ? '&' : '?';
+        return endpoint + sep + 'api_key=' + encodeURIComponent(apiKey || '');
+    }
+
+    // relative path
+    lb = (lb || '').trim();
+    if (!lb) {
+        return '(missing LB URL) ' + endpoint;
+    }
+    lb = lb.replace(/\/$/, '');
+    var path = '/' + endpoint.replace(/^\//, '');
+    var url = lb + path;
+    if (endpoint.includes('{api_key}')) {
+        return url.replace('{api_key}', encodeURIComponent(apiKey || ''));
+    }
+    var sep = url.includes('?') ? '&' : '?';
+    return url + sep + 'api_key=' + encodeURIComponent(apiKey || '');
+}
+
+function refreshPreviews() {
+    var lb = document.getElementById('load_balancer_url') ? document.getElementById('load_balancer_url').value : '';
+    var ep = document.getElementById('token_endpoint') ? document.getElementById('token_endpoint').value : '';
+    var epv = document.getElementById('token_version_endpoint') ? document.getElementById('token_version_endpoint').value : '';
+    var apiSrc = document.getElementById('api_key_source') ? document.getElementById('api_key_source').value : 'manual';
+    var apiManual = document.getElementById('api_key_manual') ? document.getElementById('api_key_manual').value : '';
+    var persisted = '{{ addslashes($exambro_api_key ?? '') }}';
+    var apiKey = apiSrc === 'db' ? persisted : apiManual;
+
+    var p1 = buildPreviewUrl(lb, ep, apiKey);
+    var p2 = buildPreviewUrl(lb, epv, apiKey);
+
+    document.getElementById('preview_token_url').textContent = p1;
+    document.getElementById('preview_token_version_url').textContent = p2;
+}
+
+['load_balancer_url','token_endpoint','token_version_endpoint','api_key_source','api_key_manual'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', refreshPreviews);
+    el.addEventListener('change', refreshPreviews);
+});
+
+document.addEventListener('DOMContentLoaded', function(){ refreshPreviews(); });
+</script>
+
             <nav class="menu" aria-label="Menu pengaturan admin">
-                <button class="menu-btn active" data-target="panel-token-pin" type="button">
-                    Pengaturan Token dan PIN
-                    <small>Token CBT, PIN Exambro, status, dan peringatan</small>
-                </button>
-                <button class="menu-btn" data-target="panel-web" type="button">
+                <button class="menu-btn active" data-target="panel-web" type="button">
                     Pengaturan WEB
                     <small>Server utama/backup yang tampil di halaman home</small>
                 </button>
+                
                 <button class="menu-btn" data-target="panel-user-agent" type="button">
                     Pengaturan User-Agent
                     <small>Deteksi Exambro berdasarkan User-Agent client</small>
                 </button>
-                <button class="menu-btn" data-target="panel-version-sync" type="button">
-                    Sinkronisasi Version
-                    <small>Atur key, timeout, dan eksekusi sinkron version.json</small>
+                <button class="menu-btn" data-target="panel-exambro-settings" type="button">
+                    Pengaturan Exambro
+                    <small>Atur visibilitas token/PIN dan fitur Exambro</small>
                 </button>
-                <button class="menu-btn" data-target="panel-version-sync-servers" type="button">
-                    Server JSON Sync
-                    <small>Kelola daftar server khusus tujuan sinkron version.json</small>
-                </button>
-                <button class="menu-btn" data-target="panel-redis-cluster" type="button">
-                    Redis Cluster
-                    <small>Hubungkan beberapa server melalui satu pusat Redis</small>
-                </button>
+                <!-- Version sync UI removed -->
+                <!-- Redis Cluster menu removed -->
             </nav>
 
             <div class="sidebar-actions">
@@ -994,14 +1062,7 @@
                 @else
                     <span class="link-btn btn-soft" style="opacity:0.6; cursor:not-allowed;">Link Load Balancing aktif jika mirror valid lebih dari 1</span>
                 @endif
-                <button
-                    id="btn-flush-cache"
-                    type="button"
-                    class="btn-soft"
-                    style="width:100%;text-align:center;"
-                    onclick="flushCacheFromAdmin()"
-                >Sync Token dari DB</button>
-                <span id="flush-result" style="display:none;font-size:0.82rem;padding:6px 8px;border-radius:8px;text-align:center;"></span>
+                <!-- Sync Token from DB removed per request -->
             </div>
 
             <form class="logout-form" action="{{ route('cbt.admin.logout') }}" method="post">
@@ -1028,181 +1089,7 @@
                 @endif
             </section>
 
-            <section id="panel-token-pin" class="panel active">
-                <h3>Pengaturan Token dan PIN</h3>
-                <p class="panel-desc">Atur status token Exambro, status PIN, tampilan PIN, peringatan, dan pembaruan Token CBT.</p>
-
-                <div class="grid">
-                    <article class="card">
-                        <h4>Status Token Exambro</h4>
-                        <p>Menentukan apakah token Exambro aktif untuk integrasi aplikasi.</p>
-                        <span class="status-pill {{ $exambroActive ? 'status-on' : 'status-off' }}">
-                            {{ $exambroActive ? 'AKTIF' : 'NON-AKTIF' }}
-                        </span>
-                        <form class="btn-row" action="{{ route('cbt.exambro.toggle') }}" method="post">
-                            @csrf
-                            <button class="{{ $exambroActive ? 'btn-danger' : 'btn-primary' }}" type="submit">
-                                {{ $exambroActive ? 'Non-aktifkan Token' : 'Aktifkan Token' }}
-                            </button>
-                        </form>
-                    </article>
-
-                    <article class="card">
-                        <h4>Status PIN Exambro</h4>
-                        <p>Menentukan apakah PIN Exambro bisa digunakan di aplikasi.</p>
-                        <span class="status-pill {{ $exambroPinActive ? 'status-on' : 'status-off' }}">
-                            {{ $exambroPinActive ? 'AKTIF' : 'NON-AKTIF' }}
-                        </span>
-                        <form class="btn-row" action="{{ route('cbt.exambro.pin.toggle') }}" method="post">
-                            @csrf
-                            <button class="{{ $exambroPinActive ? 'btn-danger' : 'btn-primary' }}" type="submit">
-                                {{ $exambroPinActive ? 'Non-aktifkan PIN' : 'Aktifkan PIN' }}
-                            </button>
-                        </form>
-                    </article>
-
-                    <article class="card">
-                        <h4>Peringatan Exambro</h4>
-                        <p>Saat ON, pesan peringatan tampil di halaman Exambro.</p>
-                        <span class="status-pill {{ $exambroWarningValue === 1 ? 'status-on' : 'status-off' }}">
-                            {{ $exambroWarningValue === 1 ? 'ON (1)' : 'OFF (0)' }}
-                        </span>
-                        <form class="btn-row" action="{{ route('cbt.exambro.warning.toggle') }}" method="post">
-                            @csrf
-                            <button class="{{ $exambroWarningValue === 1 ? 'btn-danger' : 'btn-primary' }}" type="submit">
-                                {{ $exambroWarningValue === 1 ? 'OFF-kan Peringatan' : 'ON-kan Peringatan' }}
-                            </button>
-                        </form>
-                    </article>
-
-                    <article class="card">
-                        <h4>Tampilan PIN di Halaman Exambro</h4>
-                        <p>Hanya mengatur tampilan PIN, tidak mengubah fungsi PIN.</p>
-                        <span class="status-pill {{ $exambroTokenVisibleOnPage ? 'status-on' : 'status-off' }}">
-                            {{ $exambroTokenVisibleOnPage ? 'TAMPIL' : 'SEMBUNYI' }}
-                        </span>
-                        <form class="btn-row" action="{{ route('cbt.exambro.token.visibility.toggle') }}" method="post">
-                            @csrf
-                            <button class="btn-soft" type="submit">
-                                {{ $exambroTokenVisibleOnPage ? 'Sembunyikan PIN' : 'Tampilkan PIN' }}
-                            </button>
-                        </form>
-                    </article>
-                </div>
-
-                <article class="card" style="margin-top: 12px;">
-                    <h4>PIN Exambro Aktif</h4>
-                    <p>
-                        Sumber PIN:
-                        {{ $exambroTokenSource === 'file' ? 'file server' : ($exambroTokenSource === 'web' ? 'web/server file' : '.env') }}
-                    </p>
-                    <div class="field">
-                        <label for="exambro-token">PIN Exambro</label>
-                        <input id="exambro-token" type="text" value="{{ $exambroToken ?: 'Belum ada PIN Exambro' }}" readonly>
-                    </div>
-                    <div class="btn-row">
-                        <form action="{{ route('cbt.exambro.token.generate') }}" method="post" style="width: 100%;">
-                            @csrf
-                            <button class="btn-primary" type="submit">Generate PIN Exambro</button>
-                        </form>
-                        <button class="copy-btn" id="copy-exambro-token" type="button">Salin PIN Exambro</button>
-                    </div>
-                </article>
-
-                <article class="card" style="margin-top: 12px;">
-                    <h4>PIN Darurat Exit Exambro</h4>
-                    <p>PIN ini khusus untuk emergency exit di aplikasi Neo_Exam. Sumber saat ini: {{ $exambroEmergencyExitPinSource === 'file' ? 'file server' : '.env' }}.</p>
-                    <form action="{{ route('cbt.exambro.exit-emergency-pin.update') }}" method="post">
-                        @csrf
-                        <div class="field">
-                            <label for="exambro-exit-emergency-pin">PIN Darurat Exit</label>
-                            <input
-                                id="exambro-exit-emergency-pin"
-                                name="exambro_exit_emergency_pin"
-                                type="text"
-                                maxlength="20"
-                                pattern="[A-Za-z0-9_-]{4,20}"
-                                value="{{ old('exambro_exit_emergency_pin', $exambroEmergencyExitPin) }}"
-                                required
-                            >
-                            @error('exambro_exit_emergency_pin')
-                                <small style="color:#fca5a5;">{{ $message }}</small>
-                            @enderror
-                        </div>
-                        <div class="btn-row">
-                            <button class="btn-primary" type="submit">Simpan PIN Darurat Exit</button>
-                        </div>
-                    </form>
-                </article>
-
-                <article class="card" style="margin-top: 12px;">
-                    <h4>Update Token CBT</h4>
-                    <p>Form ini untuk update Token CBT saja. URL server mengikuti data WEB saat ini.</p>
-                    <form action="{{ route('cbt.update') }}" method="post">
-                        @csrf
-                        @php
-                            $serverOne = $servers[0] ?? null;
-                            $serverTwo = $servers[1] ?? null;
-                            $serverThree = $servers[2] ?? null;
-                        @endphp
-                        <div class="field">
-                            <label for="token-only">Token CBT</label>
-                            <input id="token-only" name="token" type="text" maxlength="6" value="{{ old('token', $info->token) }}" required>
-                        </div>
-                        <input type="hidden" name="primary_url" value="{{ old('primary_url', $serverOne['url'] ?? $info->cbt_url) }}">
-                        <input type="hidden" name="backup_url_1" value="{{ old('backup_url_1', $serverTwo['url'] ?? $info->cbt_backup_url_1) }}">
-                        <input type="hidden" name="backup_url_2" value="{{ old('backup_url_2', $serverThree['url'] ?? $info->cbt_backup_url_2) }}">
-                        <input type="hidden" name="server_name_primary" value="{{ old('server_name_primary', $serverOne['name'] ?? ($info->server_name_primary ?? 'Server Utama')) }}">
-                        <input type="hidden" name="server_name_backup_1" value="{{ old('server_name_backup_1', $serverTwo['name'] ?? ($info->server_name_backup_1 ?? 'Server 1')) }}">
-                        <input type="hidden" name="server_name_backup_2" value="{{ old('server_name_backup_2', $serverThree['name'] ?? ($info->server_name_backup_2 ?? 'Server 2')) }}">
-                        <input type="hidden" name="primary_core" value="{{ old('primary_core', $serverOne['core'] ?? ($info->server_primary_core ?? 4)) }}">
-                        <input type="hidden" name="backup1_core" value="{{ old('backup1_core', $serverTwo['core'] ?? ($info->server_backup1_core ?? 4)) }}">
-                        <input type="hidden" name="backup2_core" value="{{ old('backup2_core', $serverThree['core'] ?? ($info->server_backup2_core ?? 4)) }}">
-                        <input type="hidden" name="primary_ram" value="{{ old('primary_ram', $serverOne['ram'] ?? ($info->server_primary_ram ?? '8 GB')) }}">
-                        <input type="hidden" name="backup1_ram" value="{{ old('backup1_ram', $serverTwo['ram'] ?? ($info->server_backup1_ram ?? '8 GB')) }}">
-                        <input type="hidden" name="backup2_ram" value="{{ old('backup2_ram', $serverThree['ram'] ?? ($info->server_backup2_ram ?? '8 GB')) }}">
-                        <input type="hidden" name="primary_capacity" value="{{ old('primary_capacity', $serverOne['capacity'] ?? ($info->server_primary_capacity ?? 40)) }}">
-                        <input type="hidden" name="backup1_capacity" value="{{ old('backup1_capacity', $serverTwo['capacity'] ?? ($info->server_backup1_capacity ?? 40)) }}">
-                        <input type="hidden" name="backup2_capacity" value="{{ old('backup2_capacity', $serverThree['capacity'] ?? ($info->server_backup2_capacity ?? 40)) }}">
-                        <input type="hidden" name="description" value="{{ old('description', $info->description) }}">
-                        <div class="btn-row">
-                            <button class="btn-primary" type="submit">Simpan Token CBT</button>
-                        </div>
-                    </form>
-                </article>
-            </section>
-
-            <section id="panel-web" class="panel">
-                <h3>Pengaturan WEB</h3>
-                <p class="panel-desc">Kelola jumlah mirror web, alamat mirror, dan status mirror yang dipakai untuk load balancing dari `mirror_list.json`.</p>
-
-                <article class="card" style="margin-top: 12px;">
-                    <h4>Mirror List Load Balancing</h4>
-                    <p>File <strong>mirror_list.json</strong> otomatis dibuat dari data di panel ini. Setiap tambah, edit, hapus, hide, atau toggle LB pada mirror akan langsung menyinkronkan daftar mirror load balancing.</p>
-                    <div class="grid" style="margin-top: 12px;">
-                        <div class="field">
-                            <label>URL mirror_list.json</label>
-                            <input type="text" value="{{ $mirrorListUrl }}" readonly>
-                        </div>
-                        <div class="field">
-                            <label>Jumlah Mirror Valid</label>
-                            <input type="text" value="{{ $loadBalancerMirrorCount }} mirror" readonly>
-                        </div>
-                        <div class="field">
-                            <label>Status Link Load Balancing</label>
-                            <input type="text" value="{{ $loadBalancerLinkAvailable ? 'AKTIF' : 'MENUNGGU MINIMAL 2 MIRROR' }}" readonly>
-                        </div>
-                    </div>
-                    <div class="btn-row">
-                        <a class="link-btn btn-soft" href="{{ $mirrorListUrl }}" target="_blank" rel="noopener noreferrer">Buka mirror_list.json</a>
-                        @if ($loadBalancerLinkAvailable)
-                            <a class="link-btn btn-soft" href="{{ route('cbt.lb') }}" target="_blank" rel="noopener noreferrer">Tes Link Load Balancing</a>
-                        @else
-                            <span class="link-btn btn-soft" style="opacity:0.6; cursor:not-allowed;">Tambah minimal 2 mirror valid agar link LB aktif</span>
-                        @endif
-                    </div>
-                </article>
-
+            <section id="panel-web" class="panel active">
                 <article class="card" style="margin-top: 12px;">
                     <h4>Tambah Mirror Baru</h4>
                     <form action="{{ route('cbt.server.add') }}" method="post">
@@ -1235,22 +1122,7 @@
                     </form>
                 </article>
 
-                <article class="card bulk-selection-card">
-                    <h4>Kontrol Massal Pilihan Exambro</h4>
-                    <p>Atur disable/enable tombol pemilihan server Exambro untuk semua mirror sekaligus.</p>
-                    <form action="{{ route('cbt.server.selection.all.timer') }}" method="post">
-                        @csrf
-                        <div class="field">
-                            <label for="bulk-disable-minutes">Disable Semua Selama (menit)</label>
-                            <input id="bulk-disable-minutes" name="disable_minutes" type="number" min="1" max="1440" placeholder="Contoh: 30">
-                        </div>
-                        <div class="bulk-selection-actions">
-                            <button class="btn-soft" type="submit" name="action" value="set_timer" style="background:#f59e0b;color:#fff;border:0;">Set Timer Semua</button>
-                            <button class="btn-soft" type="submit" name="action" value="disable_all" style="background:#dc2626;color:#fff;border:0;">Disable Semua</button>
-                            <button class="btn-soft" type="submit" name="action" value="enable_all" style="background:#16a34a;color:#fff;border:0;">Enable Semua</button>
-                        </div>
-                    </form>
-                </article>
+                <!-- Pengaturan Token & PIN Exambro moved to dedicated Exambro panel -->
 
                 <div class="svr-section">
                     <div class="svr-section-header">
@@ -1476,6 +1348,29 @@
                             <label for="description">Keterangan / Deskripsi Halaman</label>
                             <textarea id="description" name="description">{{ old('description', $info->description) }}</textarea>
                         </div>
+                        <div class="field">
+                            <label for="load_balancer_url">Link Load Balancing (opsional)</label>
+                            <input id="load_balancer_url" name="load_balancer_url" type="url" maxlength="255" placeholder="https://your-loadbalancer.example/go-cbt" value="{{ old('load_balancer_url', $info->load_balancing_url ?? '') }}">
+                            <p style="margin:6px 0 0; color:var(--muted); font-size:0.88rem;">Jika dikosongkan sistem akan gunakan <code>/go-cbt</code> pada homepage.</p>
+                        </div>
+                        <div class="field">
+                            <label for="token_endpoint">Endpoint Token (relatif atau full URL)</label>
+                            <input id="token_endpoint" name="token_endpoint" type="text" maxlength="255" placeholder="/token.json atau https://node.example/token.json" value="{{ old('token_endpoint', $exambro_token_endpoint ?? '/token.json') }}">
+                            <p style="margin:6px 0 0; color:var(--muted); font-size:0.88rem;">Bisa berupa path relatif (digabung dengan LB URL) atau full URL. Gunakan <code>{api_key}</code> jika ingin menempatkan API key di posisi khusus (contoh: <code>https://node.example/token.json?api_key={api_key}</code>).</p>
+                        </div>
+                        <div class="field">
+                            <label for="token_version_endpoint">Endpoint Token versi (relatif atau full URL)</label>
+                            <input id="token_version_endpoint" name="token_version_endpoint" type="text" maxlength="255" placeholder="/version.token.json atau https://node.example/version.token.json" value="{{ old('token_version_endpoint', $exambro_token_version_endpoint ?? '/version.token.json') }}">
+                            <p style="margin:6px 0 0; color:var(--muted); font-size:0.88rem;">Contoh relativ: <code>/version.token.json</code>. Contoh penuh dengan placeholder: <code>https://node.example/version.token.json?api_key={api_key}</code>.</p>
+                        </div>
+
+                        <div class="field" style="margin-top:8px;">
+                            <label>Preview URL yang akan dipanggil</label>
+                            <div style="font-size:0.9rem; color:var(--muted); margin-top:6px;">
+                                <div>Token URL: <code id="preview_token_url">-</code></div>
+                                <div style="margin-top:6px;">Version Token URL: <code id="preview_token_version_url">-</code></div>
+                            </div>
+                        </div>
                         <div class="btn-row">
                             <button class="btn-primary" type="submit">Simpan Keterangan</button>
                         </div>
@@ -1512,205 +1407,110 @@
                 </article>
             </section>
 
-            <section id="panel-version-sync" class="panel">
-                <h3>Sinkronisasi Version.json</h3>
-                <p class="panel-desc">Panel ini khusus pengaturan key sinkron, timeout, dan eksekusi sinkron manual tanpa CLI.</p>
+            <section id="panel-exambro-settings" class="panel">
+                <h3>Pengaturan Exambro</h3>
+                <p class="panel-desc">Kontrol fitur Exambro: sinkron token, toggle fitur, dan kontrol massal pilihan.</p>
 
                 <article class="card" style="margin-top: 12px;">
-                    <h4>Status Sinkronisasi</h4>
-                    <div class="grid" style="margin-top: 12px;">
-                        <div class="field">
-                            <label>Status Fitur</label>
-                            <input type="text" value="{{ $versionSyncSettings['enabled'] ? 'AKTIF' : 'NONAKTIF' }}" readonly>
+                    <h4>Pengaturan Token & PIN Exambro</h4>
+                    <p class="panel-desc">Ambil token dan PIN langsung dari LB node. Pilih sumber API key dan tekan sinkron.</p>
+                    <div class="card" style="margin-top:12px; padding:10px; background: #f8fafc;">
+                        <h5 style="margin:0 0 8px 0;">Token & PIN Saat Ini (dari database)</h5>
+                        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                            <div>
+                                <label style="font-size:0.85rem; color:var(--muted);">Token</label>
+                                <div id="exambro_current_token" style="font-weight:700; font-size:1.05rem;">{{ $currentCbtToken ?? '-' }}</div>
+                            </div>
+                            <div>
+                                <label style="font-size:0.85rem; color:var(--muted);">PIN</label>
+                                <div id="exambro_current_pin" style="font-weight:700; font-size:1.05rem;">{{ $currentPinExambro !== '' ? $currentPinExambro : '-' }}</div>
+                            </div>
+                            <div>
+                                <label style="font-size:0.85rem; color:var(--muted);">Sumber</label>
+                                <div id="exambro_current_source" style="font-weight:700; font-size:0.95rem;">{{ $exambroTokenSource ?? 'db' }}</div>
+                            </div>
+                            <div style="margin-left:auto">
+                                <div style="display:flex; gap:8px;">
+                                    <button id="exambro_refresh_now" class="btn-soft">Refresh Sekarang</button>
+                                    <button id="exambro_show_db" class="btn-soft">Tampilkan dari DB</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="field">
-                            <label>Versi Saat Ini</label>
-                            <input type="text" value="{{ $currentConfigVersion !== '' ? $currentConfigVersion : 'Belum ada' }}" readonly>
-                        </div>
-                        <div class="field">
-                            <label>Jumlah Target Server JSON</label>
-                            <input type="text" value="{{ count($versionSyncTargets) }} target" readonly>
-                        </div>
-                        <div class="field">
-                            <label>Timeout Request Sinkron</label>
-                            <input type="text" value="{{ $versionSyncSettings['timeout_seconds'] }} detik" readonly>
-                        </div>
+                        <div id="exambro_poll_status" style="margin-top:8px; color:var(--muted); font-size:0.85rem;">Terakhir diperbarui: -</div>
+                        <pre id="exambro_db_json" style="margin-top:8px; display:none; background:#f1f5f9; padding:8px; border-radius:6px; font-size:0.82rem; overflow:auto; max-height:160px;"></pre>
                     </div>
-
-                    <div class="field" style="margin-top: 10px;">
-                        <label>Daftar Target Sinkron</label>
-                        <textarea readonly>@if (count($versionSyncTargets) === 0)
-Tidak ada target mirror valid.
-@else
-@foreach($versionSyncTargets as $target)
-- {{ $target['name'] }} ({{ $target['host'] }})
-{{ $target['sync_endpoint'] }}
-@endforeach
-@endif</textarea>
-                    </div>
-                </article>
-
-                <article class="card" style="margin-top: 12px;">
-                    <h4>Pengaturan Sinkron</h4>
-                    <form action="{{ route('cbt.version.sync.settings.update') }}" method="post">
+                    <form action="{{ route('cbt.exambro.fetch') }}" method="post">
                         @csrf
-                        <div class="field" style="display: flex; align-items: center; gap: 10px;">
-                            <input id="version_sync_enabled" name="version_sync_enabled" type="checkbox" value="1" {{ $versionSyncSettings['enabled'] ? 'checked' : '' }} style="width: auto;">
-                            <label for="version_sync_enabled" style="margin: 0;">Aktifkan sinkronisasi version.json ke daftar server JSON Sync</label>
+                        <div class="grid" style="margin-top: 8px;">
+                            <div class="field">
+                                <label for="api_key_source_exambro">Sumber API Key</label>
+                                <select id="api_key_source_exambro" name="api_key_source">
+                                    <option value="manual" {{ (old('api_key_source', (string)($exambro_api_key_source ?? 'manual')) === 'manual') ? 'selected' : '' }}>Manual (ketik API key)</option>
+                                    <option value="db" {{ (old('api_key_source', (string)($exambro_api_key_source ?? 'manual')) === 'db') ? 'selected' : '' }}>Ambil dari DB (cbt_token)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="api_key_manual_exambro">API Key (manual)</label>
+                                <input id="api_key_manual_exambro" name="api_key_manual" type="text" maxlength="255" placeholder="Masukkan API key jika pilih Manual" value="{{ old('api_key_manual', (string)($exambro_api_key ?? '')) }}">
+                            </div>
                         </div>
-
-                        <div class="field">
-                            <label for="version_sync_key">Sync Key Antar Server (min 16 karakter)</label>
-                            <input
-                                id="version_sync_key"
-                                name="version_sync_key"
-                                type="text"
-                                maxlength="128"
-                                pattern="[A-Za-z0-9_-]{16,128}"
-                                value="{{ old('version_sync_key', $versionSyncSettings['key']) }}"
-                                placeholder="Contoh: SYNC_KEY_2026_SERVER_CLUSTER"
-                                required
-                            >
-                        </div>
-
-                        <div class="field">
-                            <label for="version_sync_timeout_seconds">Timeout Request (1-5 detik)</label>
-                            <input
-                                id="version_sync_timeout_seconds"
-                                name="version_sync_timeout_seconds"
-                                type="number"
-                                min="1"
-                                max="5"
-                                value="{{ old('version_sync_timeout_seconds', $versionSyncSettings['timeout_seconds']) }}"
-                                required
-                            >
-                        </div>
-
                         <div class="btn-row">
-                            <button class="btn-primary" type="submit">Simpan Pengaturan Sinkron</button>
+                            <button class="btn-primary" type="submit">Sinkron Token & PIN Sekarang</button>
                         </div>
                     </form>
 
-                    <form action="{{ route('cbt.version.sync.now') }}" method="post" style="margin-top: 10px;">
+                    <div style="margin-top:12px; color:var(--muted);">
+                        Token dan PIN sekarang hanya diambil dari endpoint <code>token.json</code> / <code>version.token.json</code> dan disimpan otomatis ke database oleh mekanisme fetch.
+                    </div>
+
+                    <div style="display:flex; gap:12px; margin-top:12px; flex-wrap:wrap;">
+                        <form action="{{ route('cbt.exambro.pin.toggle') }}" method="post" style="display:inline-block;">
+                            @csrf
+                            <div class="card" style="padding:10px; min-width:220px;">
+                                <h5 style="margin:0 0 8px 0;">Status PIN Exambro</h5>
+                                <div style="margin-bottom:8px;">Saat ini: <strong class="{{ $exambroPinActive ? 'status-on' : 'status-off' }}">{{ $exambroPinActive ? 'AKTIF' : 'NON-AKTIF' }}</strong></div>
+                                <div class="btn-row">
+                                    <button class="btn-soft" type="submit">{{ $exambroPinActive ? 'Nonaktifkan PIN' : 'Aktifkan PIN' }}</button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <form action="{{ route('cbt.exambro.warning.toggle') }}" method="post" style="display:inline-block;">
+                            @csrf
+                            <div class="card" style="padding:10px; min-width:220px;">
+                                <h5 style="margin:0 0 8px 0;">Status Peringatan Exambro</h5>
+                                <div style="margin-bottom:8px;">Saat ini: <strong class="{{ $exambroWarningValue === 1 ? 'status-on' : 'status-off' }}">{{ $exambroWarningValue === 1 ? 'ON' : 'OFF' }}</strong></div>
+                                <div class="btn-row">
+                                    <button class="btn-soft" type="submit">{{ $exambroWarningValue === 1 ? 'Matikan Peringatan' : 'Aktifkan Peringatan' }}</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </article>
+
+                <article class="card bulk-selection-card" style="margin-top:12px;">
+                    <h4>Kontrol Massal Pilihan Exambro</h4>
+                    <p>Atur disable/enable tombol pemilihan server Exambro untuk semua mirror sekaligus.</p>
+                    <form action="{{ route('cbt.server.selection.all.timer') }}" method="post">
                         @csrf
-                        <div class="btn-row">
-                            <button class="btn-soft" type="submit">Sinkronkan Sekarang ke Semua Server JSON</button>
+                        <div class="field">
+                            <label for="bulk-disable-minutes">Disable Semua Selama (menit)</label>
+                            <input id="bulk-disable-minutes" name="disable_minutes" type="number" min="1" max="1440" placeholder="Contoh: 30">
+                        </div>
+                        <div class="bulk-selection-actions">
+                            <button class="btn-soft" type="submit" name="action" value="set_timer" style="background:#f59e0b;color:#fff;border:0;">Set Timer Semua</button>
+                            <button class="btn-soft" type="submit" name="action" value="disable_all" style="background:#dc2626;color:#fff;border:0;">Disable Semua</button>
+                            <button class="btn-soft" type="submit" name="action" value="enable_all" style="background:#16a34a;color:#fff;border:0;">Enable Semua</button>
                         </div>
                     </form>
                 </article>
             </section>
 
-            <section id="panel-version-sync-servers" class="panel">
-                <h3>Server JSON Sync</h3>
-                <p class="panel-desc">Panel ini terpisah dari server LB. Daftar server di sini hanya dipakai untuk sinkronisasi version.json.</p>
+            <!-- Version sync panels removed -->
 
-                <article class="card" style="margin-top: 12px;">
-                    <h4>Daftar Server Tujuan Sinkron</h4>
-                    <p>Format per baris: <strong>Nama|URL</strong> atau langsung <strong>URL</strong>. Contoh: <em>Node 2|https://red2.example.sch.id</em>.</p>
-                    <form action="{{ route('cbt.version.sync.servers.update') }}" method="post">
-                        @csrf
-                        <div class="field">
-                            <label for="version_sync_servers_text">Daftar Server JSON Sync</label>
-                            <textarea id="version_sync_servers_text" name="version_sync_servers_text" rows="8" placeholder="Node 2|https://red2.example.sch.id&#10;Node 3|https://red3.example.sch.id">{{ old('version_sync_servers_text', $versionSyncServersText) }}</textarea>
-                        </div>
-                        <div class="btn-row">
-                            <button class="btn-primary" type="submit">Simpan Daftar Server JSON Sync</button>
-                        </div>
-                    </form>
-                </article>
-            </section>
+            <!-- Version sync servers panel removed -->
 
-            <section id="panel-redis-cluster" class="panel">
-                <h3>Redis Cluster</h3>
-                <p class="panel-desc">Aktifkan Redis untuk menghubungkan beberapa server. Satu server bertindak sebagai pusat Redis (master), server lainnya dikonfigurasi di panel ini untuk terhubung ke sana. Konfigurasi disimpan di file dan dibaca sejak awal boot — tidak bergantung pada database.</p>
-
-                @if (session('status'))
-                    <div class="alert-ok" style="margin-bottom:16px;">{{ session('status') }}</div>
-                @endif
-
-                <article class="card" style="margin-top:12px;">
-                    <h4>Konfigurasi Koneksi Redis</h4>
-                    <form id="redis-config-form" action="{{ route('cbt.admin.redis.config') }}" method="post">
-                        @csrf
-
-                        <div class="field" style="margin-bottom:14px;">
-                            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                                <input type="hidden" name="redis_enabled" value="0">
-                                <input type="checkbox" name="redis_enabled" value="1" id="redis_enabled"
-                                    {{ $redisConfig['enabled'] ? 'checked' : '' }}
-                                    style="width:18px;height:18px;cursor:pointer;">
-                                <span><strong>Aktifkan Redis Cluster</strong></span>
-                            </label>
-                            <small style="margin-top:4px;display:block;">Jika diaktifkan, cache dan sesi seluruh server akan menggunakan Redis yang dikonfigurasi di bawah.</small>
-                        </div>
-
-                        <div class="field">
-                            <label for="redis_host">Host / IP Redis Master</label>
-                            <input type="text" id="redis_host" name="redis_host" placeholder="127.0.0.1"
-                                value="{{ old('redis_host', $redisConfig['host']) }}">
-                            <small>Isi dengan IP privat atau hostname server Redis master.</small>
-                        </div>
-
-                        <div class="field">
-                            <label for="redis_port">Port Redis</label>
-                            <input type="number" id="redis_port" name="redis_port" placeholder="6379" min="1" max="65535"
-                                value="{{ old('redis_port', $redisConfig['port']) }}">
-                        </div>
-
-                        <div class="field">
-                            <label for="redis_password">Password Redis (kosongkan jika tidak ada)</label>
-                            <input type="password" id="redis_password" name="redis_password" placeholder="(kosong = tanpa password)"
-                                value="{{ old('redis_password', $redisConfig['password']) }}"
-                                autocomplete="new-password">
-                        </div>
-
-                        <div class="field">
-                            <label for="redis_prefix">Prefix Key (<code>tokeninfo_</code> jika dikosongkan)</label>
-                            <input type="text" id="redis_prefix" name="redis_prefix" placeholder="tokeninfo_"
-                                value="{{ old('redis_prefix', $redisConfig['prefix']) }}">
-                            <small>Pisahkan data antar-aplikasi di Redis yang sama menggunakan prefix unik.</small>
-                        </div>
-
-                        <div class="btn-row">
-                            <button class="btn-primary" type="submit">Simpan Konfigurasi Redis</button>
-                        </div>
-                    </form>
-                </article>
-
-                <article class="card" style="margin-top:16px;">
-                    <h4>Uji Koneksi Redis</h4>
-                    <p>Masukkan data koneksi lalu klik tombol untuk mengecek apakah Redis dapat dijangkau dari server ini tanpa menyimpan konfigurasi.</p>
-                    <div class="field">
-                        <label for="test_redis_host">Host Uji</label>
-                        <input type="text" id="test_redis_host" placeholder="127.0.0.1"
-                            value="{{ $redisConfig['host'] }}">
-                    </div>
-                    <div class="field">
-                        <label for="test_redis_port">Port Uji</label>
-                        <input type="number" id="test_redis_port" placeholder="6379" min="1" max="65535"
-                            value="{{ $redisConfig['port'] }}">
-                    </div>
-                    <div class="field">
-                        <label for="test_redis_password">Password Uji</label>
-                        <input type="password" id="test_redis_password" placeholder="(kosong = tanpa password)">
-                    </div>
-                    <div class="btn-row">
-                        <button class="btn-primary" type="button" id="btn-redis-test">Uji Koneksi Sekarang</button>
-                    </div>
-                    <div id="redis-test-result" style="margin-top:12px;display:none;"></div>
-                </article>
-
-                <article class="card" style="margin-top:16px;">
-                    <h4>Cara Kerja</h4>
-                    <ol style="padding-left:18px;line-height:1.7;">
-                        <li>Instal Redis di satu server (server <strong>master Redis</strong>).</li>
-                        <li>Pastikan Redis dapat diakses dari seluruh server lain via IP privat (bind atau firewall).</li>
-                        <li>Di setiap server, buka panel ini dan isi IP master Redis lalu aktifkan.</li>
-                        <li>Klik <em>Simpan</em>. Tidak perlu restart PHP-FPM — konfigurasi dibaca ulang tiap request.</li>
-                        <li>Cache dan sesi seluruh server akan terpusat di Redis master secara otomatis.</li>
-                    </ol>
-                </article>
-            </section>
+            <!-- Redis Cluster panel removed -->
         </main>
     </div>
 
@@ -1719,48 +1519,18 @@ Tidak ada target mirror valid.
             var menuButtons = Array.prototype.slice.call(document.querySelectorAll('.menu-btn'));
             var panels = Array.prototype.slice.call(document.querySelectorAll('.panel'));
 
-            // Redis test connection
-            var btnRedisTest = document.getElementById('btn-redis-test');
-            if (btnRedisTest) {
-                btnRedisTest.addEventListener('click', function () {
-                    var host = document.getElementById('test_redis_host').value.trim();
-                    var port = document.getElementById('test_redis_port').value.trim();
-                    var password = document.getElementById('test_redis_password').value;
-                    var resultBox = document.getElementById('redis-test-result');
-
-                    resultBox.style.display = 'block';
-                    resultBox.style.color = '#888';
-                    resultBox.textContent = 'Menguji koneksi...';
-
-                    var formData = new FormData();
-                    formData.append('host', host);
-                    formData.append('port', port);
-                    formData.append('password', password);
-                    formData.append('_token', '{{ csrf_token() }}');
-
-                    fetch('{{ route("cbt.admin.redis.test") }}', {
-                        method: 'POST',
-                        body: formData,
-                    })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        resultBox.style.color = data.status === 'ok' ? '#2a7a2a' : '#c0392b';
-                        resultBox.textContent = data.message;
-                    })
-                    .catch(function () {
-                        resultBox.style.color = '#c0392b';
-                        resultBox.textContent = 'Gagal mengirim request.';
-                    });
-                });
-            }
+            // Redis test connection removed
 
             function setActive(targetId) {
+                try { console.debug('setActive called ->', targetId); } catch (e) {}
                 menuButtons.forEach(function (btn) {
                     btn.classList.toggle('active', btn.getAttribute('data-target') === targetId);
                 });
 
                 panels.forEach(function (panel) {
-                    panel.classList.toggle('active', panel.id === targetId);
+                    var isActive = panel.id === targetId;
+                    panel.classList.toggle('active', isActive);
+                    panel.style.display = isActive ? 'block' : 'none';
                 });
 
                 if (window.location.hash !== '#' + targetId) {
@@ -1769,10 +1539,22 @@ Tidak ada target mirror valid.
             }
 
             menuButtons.forEach(function (btn) {
-                btn.addEventListener('click', function () {
+                btn.addEventListener('click', function (ev) {
+                    try { console.debug('menu button clicked ->', btn.getAttribute('data-target')); } catch (e) {}
                     setActive(btn.getAttribute('data-target'));
                 });
             });
+
+            // Also support event-delegation on the menu container for robustness
+            var menuNav = document.querySelector('.menu');
+            if (menuNav) {
+                menuNav.addEventListener('click', function (e) {
+                    var clicked = e.target.closest ? e.target.closest('.menu-btn') : null;
+                    if (!clicked) return;
+                    try { console.debug('menu container click ->', clicked.getAttribute('data-target')); } catch (err) {}
+                    setActive(clicked.getAttribute('data-target'));
+                });
+            }
 
             if (window.location.hash) {
                 var hashedId = window.location.hash.replace('#', '');
@@ -1780,6 +1562,11 @@ Tidak ada target mirror valid.
                 if (hasPanel) {
                     setActive(hashedId);
                 }
+            }
+            else {
+                // No hash — ensure only the first menu target (or panel-web) is visible
+                var defaultTarget = (menuButtons[0] && menuButtons[0].getAttribute('data-target')) || 'panel-web';
+                setActive(defaultTarget);
             }
 
             function copyValue(inputEl, buttonEl, fallbackMessage) {
@@ -1822,48 +1609,86 @@ Tidak ada target mirror valid.
                     copyValue(exambroTokenInput, copyTokenBtn, 'PIN Exambro kosong.');
                 });
             }
+                
+                // Exambro token/pin polling (moved outside clipboard promise chain)
+                (function () {
+                    // Use admin-only DB debug endpoint instead of public API to avoid using public API
+                    var tokenInfoUrl = '{{ route('cbt.debug.cbt-token') }}';
+                    var tokenEl = document.getElementById('exambro_current_token');
+                    var pinEl = document.getElementById('exambro_current_pin');
+                    var sourceEl = document.getElementById('exambro_current_source');
+                    var statusEl = document.getElementById('exambro_poll_status');
+                    var refreshBtn = document.getElementById('exambro_refresh_now');
+                    var showDbBtn = document.getElementById('exambro_show_db');
+                    var dbJsonPre = document.getElementById('exambro_db_json');
+                    var dbDebugUrl = '{{ route('cbt.debug.cbt-token') }}';
+
+                    function formatNow() {
+                        var d = new Date();
+                        return d.toLocaleString();
+                    }
+
+                    function updateFromJson(json) {
+                        if (!json) return;
+                        var row = json.db_row || json;
+                        if (row.token !== undefined) {
+                            if (tokenEl) tokenEl.textContent = String(row.token || '-');
+                        }
+                        // pin may not be present in this admin-only row; don't overwrite pin if absent
+                        if (row.pin !== undefined) {
+                            if (pinEl) pinEl.textContent = String(row.pin || '-');
+                        }
+                        if (sourceEl) sourceEl.textContent = 'database';
+                        if (statusEl) statusEl.textContent = 'Terakhir diperbarui: ' + formatNow();
+                    }
+
+                    function fetchTokenInfo() {
+                        fetch(tokenInfoUrl, { credentials: 'same-origin', cache: 'no-store' })
+                            .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+                            .then(function (json) { updateFromJson(json); })
+                            .catch(function (err) {
+                                if (statusEl) statusEl.textContent = 'Gagal mengambil token dari DB: ' + err.message + ' (' + formatNow() + ')';
+                            });
+                    }
+
+                    if (refreshBtn) {
+                        refreshBtn.addEventListener('click', function (e) { e.preventDefault(); fetchTokenInfo(); });
+                    }
+
+                    if (showDbBtn) {
+                        showDbBtn.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            fetch(dbDebugUrl, { credentials: 'same-origin', cache: 'no-store' })
+                                .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+                                .then(function (json) {
+                                    if (dbJsonPre) {
+                                        dbJsonPre.style.display = 'block';
+                                        dbJsonPre.textContent = JSON.stringify(json, null, 2);
+                                    }
+                                    // also update token/pin displays if present
+                                    if (json && json.db_row) {
+                                        if (tokenEl && json.db_row.token !== undefined) tokenEl.textContent = String(json.db_row.token || '-');
+                                    }
+                                })
+                                .catch(function (err) {
+                                    if (dbJsonPre) {
+                                        dbJsonPre.style.display = 'block';
+                                        dbJsonPre.textContent = 'Gagal mengambil dari DB: ' + err.message;
+                                    }
+                                });
+                        });
+                    }
+
+                    // initial fetch
+                    setTimeout(fetchTokenInfo, 500);
+                    // poll every 60s
+                    setInterval(fetchTokenInfo, 60000);
+                })();
         })();
     </script>
 
     <script>
-        function flushCacheFromAdmin() {
-            var btn = document.getElementById('btn-flush-cache');
-            var result = document.getElementById('flush-result');
-            btn.disabled = true;
-            btn.textContent = 'Memproses...';
-
-            fetch('{{ route('cbt.admin.flush-cache') }}', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-            })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                result.style.display = 'block';
-                if (data.status === 'ok') {
-                    result.style.background = '#ecfdf5';
-                    result.style.color = '#047857';
-                    result.textContent = 'Cache di-refresh! Token terbaru dari DB aktif.';
-                } else {
-                    result.style.background = '#fef2f2';
-                    result.style.color = '#b91c1c';
-                    result.textContent = data.message || 'Gagal refresh cache.';
-                }
-            })
-            .catch(function () {
-                result.style.display = 'block';
-                result.style.background = '#fef2f2';
-                result.style.color = '#b91c1c';
-                result.textContent = 'Gagal terhubung ke server.';
-            })
-            .finally(function () {
-                btn.disabled = false;
-                btn.textContent = 'Sync Token dari DB';
-            });
-        }
+        // Sync Token functionality removed
 
         function submitServerSelectionTimer(serverKey) {
             var minutesInput = document.getElementById('timer-minutes-' + serverKey);

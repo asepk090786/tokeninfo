@@ -21,14 +21,11 @@ class ConfigApiController extends Controller
         $payload = $this->fetchVersionPayloadViaAppLb($request);
 
         if ($payload === null) {
-            $versionFile = public_path('api/version.json');
+            $payload = $this->syncVersionFileWithConfig($request);
 
-            if (! file_exists($versionFile)) {
+            if ($payload === null) {
                 return response()->json(['error' => 'Version file not found'], 404);
             }
-
-            $content = file_get_contents($versionFile);
-            $payload = json_decode($content, true);
         }
 
         if (is_array($payload)) {
@@ -250,6 +247,50 @@ class ConfigApiController extends Controller
                 return null;
             }
         });
+    }
+
+    private function syncVersionFileWithConfig(Request $request): ?array
+    {
+        $configFile = public_path('api/config.json');
+        $versionFile = public_path('api/version.json');
+
+        if (! file_exists($configFile)) {
+            return null;
+        }
+
+        $configPayload = json_decode(file_get_contents($configFile), true);
+        if (! is_array($configPayload)) {
+            return null;
+        }
+
+        $existingVersionPayload = null;
+        if (file_exists($versionFile)) {
+            $existingVersionPayload = json_decode(file_get_contents($versionFile), true);
+        }
+
+        $effectiveVersion = (string) now()->timestamp;
+
+        if (is_array($existingVersionPayload)) {
+            if (Arr::get($existingVersionPayload, 'config_url', '') === '/api/config.json'
+                && Arr::get($existingVersionPayload, 'config_url_versioned', '') === '/api/config.json?v=' . rawurlencode($effectiveVersion)
+            ) {
+                return $existingVersionPayload;
+            }
+        }
+
+        $payload = [
+            'config_version' => $effectiveVersion,
+            'config_url' => '/api/config.json',
+            'config_url_versioned' => '/api/config.json?v=' . rawurlencode($effectiveVersion),
+            'last_updated' => now()->toIso8601String(),
+            'timestamp' => now()->timestamp * 1000,
+            'min_app_version' => Arr::get($existingVersionPayload, 'min_app_version', '1.0.0'),
+            'message' => Arr::get($existingVersionPayload, 'message', 'Configuration updated'),
+        ];
+
+        file_put_contents($versionFile, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return $payload;
     }
 
     private function selectNextNodeBaseUrl(Request $request): ?string

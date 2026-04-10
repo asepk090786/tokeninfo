@@ -69,7 +69,7 @@
 
         .status-strip {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 12px;
         }
 
@@ -353,11 +353,23 @@
                 </p>
             </article>
             <article class="strip-card">
+                <p class="strip-label">PIN Exambro</p>
+                <p class="strip-value" id="pin-exambro-value">{{ $currentPinExambro ?: '-' }}</p>
+                <p class="strip-meta">Status PIN: <strong>{{ $pinActive ? 'ACTIVE' : 'INACTIVE' }}</strong></p>
+                <p class="strip-meta" style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">
+                    Sumber: {{ $exambroTokenSource === 'database' ? 'Database (tabel pin_exambro)' : ($exambroTokenSource === 'file' ? 'File server' : 'Environment') }}
+                </p>
+            </article>
+
+            <article class="strip-card">
                 <p class="strip-label">Status Exambro</p>
                 <p class="strip-value {{ $exambroActive ? 'exambro-active' : 'exambro-inactive' }}">
                     {{ $exambroActive ? 'AKTIF' : 'NON-AKTIF' }}
                 </p>
-                <p class="strip-meta">PIN Exambro: <strong>{{ $info->exambro_token ?: '-' }}</strong></p>
+                <p class="strip-meta">Token Exambro: <strong>{{ $info->exambro_token ?: '-' }}</strong></p>
+                <p class="strip-meta" style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">
+                    Sumber token: {{ $exambroTokenSource === 'database' ? 'Database' : ($exambroTokenSource === 'file' ? 'File' : 'Environment') }}
+                </p>
             </article>
         </section>
 

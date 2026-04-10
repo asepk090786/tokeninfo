@@ -24,21 +24,23 @@ Route::post('/webhook/github', [GitHubWebhookController::class, 'handle'])
 Route::match(['GET', 'OPTIONS'], '/api/exambro-info', [CbtInfoController::class, 'exambroInfo'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('cbt.exambro.info');
-Route::match(['GET', 'OPTIONS'], '/api/token-info', [CbtInfoController::class, 'tokenInfo'])
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-    ->name('cbt.token.info');
 Route::match(['GET', 'OPTIONS'], '/api/mirror_list.json', [CbtInfoController::class, 'mirrorList'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('cbt.mirror-list');
+// Explicitly disable legacy token-info endpoint with 403 to avoid accidental exposure
+Route::match(['GET', 'OPTIONS'], '/api/token-info', function () {
+    return response()->json([
+        'status' => 'error',
+        'message' => 'API token-info disabled.',
+    ], 403);
+})->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 Route::match(['GET', 'OPTIONS'], '/api/exambro-token-status', [CbtInfoController::class, 'exambroTokenStatus'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('cbt.exambro.token.status');
 Route::match(['POST', 'OPTIONS'], '/api/server-presence/heartbeat', [CbtInfoController::class, 'heartbeatServerPresence'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('cbt.server.presence.heartbeat');
-Route::match(['POST', 'OPTIONS'], '/api/internal/version-sync', [CbtInfoController::class, 'receiveVersionSync'])
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-    ->name('cbt.version.sync.receive');
+// Internal version sync endpoint removed
 
 // Public config endpoints for Exambro client sync flow:
 // 1) always fetch version.json (no-cache)
@@ -78,9 +80,7 @@ Route::post('/admin/exambro-token-visibility-toggle', [CbtInfoController::class,
 Route::post('/admin/exambro-pin-toggle', [CbtInfoController::class, 'toggleExambroPinStatus'])->name('cbt.exambro.pin.toggle');
 Route::get('/admin/neo-exam/download-zip', [CbtInfoController::class, 'downloadNeoExamZip'])->name('cbt.neo-exam.zip.download');
 Route::post('/admin/user-agent-settings', [CbtInfoController::class, 'updateUserAgentSettings'])->name('cbt.user-agent.update');
-Route::post('/admin/version-sync-settings', [CbtInfoController::class, 'updateVersionSyncSettings'])->name('cbt.version.sync.settings.update');
-Route::post('/admin/version-sync-servers', [CbtInfoController::class, 'updateVersionSyncServers'])->name('cbt.version.sync.servers.update');
-Route::post('/admin/version-sync-now', [CbtInfoController::class, 'syncVersionNow'])->name('cbt.version.sync.now');
+// Version sync admin routes removed
 Route::post('/admin/server', [CbtInfoController::class, 'addServer'])->name('cbt.server.add');
 Route::post('/admin/server/{key}', [CbtInfoController::class, 'updateServerSettings'])->name('cbt.server.update');
 Route::post('/admin/server/{key}/visibility-toggle', [CbtInfoController::class, 'toggleServerVisibility'])->name('cbt.server.visibility.toggle');
@@ -89,7 +89,9 @@ Route::post('/admin/server/{key}/selection-toggle', [CbtInfoController::class, '
 Route::post('/admin/server/{key}/selection-timer', [CbtInfoController::class, 'setServerSelectionTimer'])->name('cbt.server.selection.timer');
 Route::post('/admin/server/selection-all/timer', [CbtInfoController::class, 'setAllServerSelectionTimer'])->name('cbt.server.selection.all.timer');
 Route::post('/admin/server/{key}/delete', [CbtInfoController::class, 'deleteServer'])->name('cbt.server.delete');
-Route::post('/admin/flush-cache', [CbtInfoController::class, 'flushCache'])->name('cbt.admin.flush-cache');
-Route::post('/admin/redis-config', [CbtInfoController::class, 'updateRedisConfig'])->name('cbt.admin.redis.config');
-Route::post('/admin/redis-test', [CbtInfoController::class, 'testRedisConnection'])->name('cbt.admin.redis.test');
+Route::post('/admin/pin-exambro', [CbtInfoController::class, 'updatePinExambro'])->name('cbt.admin.pin.exambro');
+Route::post('/admin/exambro-fetch', [CbtInfoController::class, 'fetchExambroTokenFromLb'])->name('cbt.exambro.fetch');
+Route::post('/admin/exambro-token/update', [CbtInfoController::class, 'updateExambroTokenFromAdmin'])->name('cbt.exambro.token.update');
 Route::post('/admin/logout', [CbtInfoController::class, 'logout'])->name('cbt.admin.logout');
+// Admin-only debug: show raw CBT token DB row (useful to compare values)
+Route::get('/admin/debug/cbt-token', [CbtInfoController::class, 'debugCbtToken'])->name('cbt.debug.cbt-token');
