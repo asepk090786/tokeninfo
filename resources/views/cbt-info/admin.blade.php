@@ -1270,6 +1270,11 @@
                             <label for="description">Keterangan / Deskripsi Halaman</label>
                             <textarea id="description" name="description">{{ old('description', $info->description) }}</textarea>
                         </div>
+                        <div class="field">
+                            <label for="load_balancer_path">Path Load Balancer</label>
+                            <input id="load_balancer_path" name="load_balancer_path" type="text" maxlength="255" placeholder="/go-cbt" value="{{ old('load_balancer_path', $loadBalancerPath) }}">
+                            <p style="margin: 6px 0 0; color: var(--muted); font-size: 0.85rem;">Isi path LB tanpa domain, contoh <code>/go-cbt</code> atau <code>/lb</code>. Default <code>/go-cbt</code>.</p>
+                        </div>
                         <div class="btn-row">
                             <button class="btn-primary" type="submit">Simpan Keterangan</button>
                         </div>

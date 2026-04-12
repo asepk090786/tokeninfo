@@ -4,11 +4,43 @@ use App\Http\Controllers\CbtInfoController;
 use App\Http\Controllers\ConfigApiController;
 use App\Http\Controllers\GitHubWebhookController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\DownloadController;
 
+$loadBalancerPath = '/go-cbt';
+
+try {
+    if (Schema::hasTable('web_settings')) {
+        $row = DB::table('web_settings')
+            ->where('setting_key', 'cbt_load_balancer_path')
+            ->first(['setting_value']);
+
+        if ($row && isset($row->setting_value)) {
+            $path = json_decode((string) $row->setting_value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $path = is_string($path) ? $path : '';
+            } else {
+                $path = (string) $row->setting_value;
+            }
+
+            $path = trim($path);
+            if ($path !== '') {
+                $path = '/' . ltrim($path, '/');
+                if ($path !== '') {
+                    $loadBalancerPath = $path;
+                }
+            }
+        }
+    }
+} catch (\Throwable $e) {
+    // Jatuhkan ke default path /go-cbt jika setting belum tersedia.
+}
+
+Route::get($loadBalancerPath, [CbtInfoController::class, 'loadBalancer'])->name('cbt.lb');
+
 Route::get('/', [CbtInfoController::class, 'index'])->name('cbt.index');
-Route::get('/go-cbt', [CbtInfoController::class, 'loadBalancer'])->name('cbt.lb');
 Route::get('/info', [CbtInfoController::class, 'index']);
 Route::get('/exambro', [CbtInfoController::class, 'exambroPage'])
     ->middleware('exambro.key')

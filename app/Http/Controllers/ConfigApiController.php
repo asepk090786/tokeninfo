@@ -96,9 +96,13 @@ class ConfigApiController extends Controller
             $baseUrl = rtrim($request->getSchemeAndHttpHost(), '/');
             $payload['base_url'] = $baseUrl;
             $payload['exambro_page_url'] = $baseUrl . '/exambro';
-            $payload['load_balancing_url'] = $baseUrl . '/go-cbt';
+            try {
+                $payload['load_balancing_url'] = route('cbt.lb');
+            } catch (\Throwable $e) {
+                $payload['load_balancing_url'] = $baseUrl . '/go-cbt';
+            }
             $payload['mirror_list_url'] = $baseUrl . '/api/mirror_list.json';
-            $content = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $content = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         }
 
         $etag = '"' . md5($content) . '"';

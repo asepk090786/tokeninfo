@@ -175,7 +175,7 @@ class CbtInfoController extends Controller
             return; // checked recently
         }
 
-        $lb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->homepageUrl('/go-cbt'));
+        $lb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->routeOrHomepageUrl('/go-cbt'));
         $lb = rtrim($lb, '/');
         $tokenVersionEndpoint = (string) $this->readPersistedSetting('cbt_token_version_endpoint', '/version.token.json');
         $tokenEndpoint = (string) $this->readPersistedSetting('cbt_token_endpoint', '/token.json');
@@ -727,6 +727,11 @@ class CbtInfoController extends Controller
         }
 
         $versionSyncTargets = $this->collectVersionSyncTargets($versionSyncServers);
+        $loadBalancerPath = (string) $this->readPersistedSetting('cbt_load_balancer_path', '/go-cbt');
+        if ($loadBalancerPath === '') {
+            $loadBalancerPath = '/go-cbt';
+        }
+        $loadBalancerPath = '/' . ltrim($loadBalancerPath, '/');
         $versionSyncServersText = $this->exportVersionSyncServersAsText($versionSyncServers);
         $versionData = $this->readVersionPayloadFromFile();
         $currentConfigVersion = trim((string) ($versionData['config_version'] ?? ''));
@@ -754,6 +759,7 @@ class CbtInfoController extends Controller
             'loadBalancerMirrorCount',
             'loadBalancerLinkAvailable',
             'mirrorListUrl',
+            'loadBalancerPath',
             'versionSyncSettings',
             'versionSyncServers',
             'versionSyncTargets',
@@ -1494,7 +1500,7 @@ class CbtInfoController extends Controller
         }
 
         $validated = $request->validate([
-            'token' => ['required', 'string', 'max:6'],
+            'token' => ['nullable', 'string', 'max:6'],
             'primary_url' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
             'backup_url_1' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
             'backup_url_2' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
@@ -1513,6 +1519,7 @@ class CbtInfoController extends Controller
             'description' => ['nullable', 'string', 'max:1000'],
             'lb_target_server' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
             'load_balancer_url' => ['nullable', 'url', 'max:255', 'regex:/^https?:\/\//i'],
+            'load_balancer_path' => ['nullable', 'string', 'max:255', 'regex:/^\/?[A-Za-z0-9\/_\-]+$/'],
             'token_endpoint' => ['nullable', 'string', 'max:255'],
             'token_version_endpoint' => ['nullable', 'string', 'max:255'],
         ]);
@@ -1549,6 +1556,14 @@ class CbtInfoController extends Controller
             ]);
         }
 
+        if ($request->has('load_balancer_path')) {
+            $loadBalancerPath = trim((string) $request->input('load_balancer_path', ''));
+            if ($loadBalancerPath !== '') {
+                $loadBalancerPath = '/' . ltrim($loadBalancerPath, '/');
+            }
+            $this->writePersistedSetting('cbt_load_balancer_path', $loadBalancerPath !== '' ? $loadBalancerPath : '/go-cbt');
+        }
+
         if (array_key_exists('load_balancer_url', $validated) || array_key_exists('lb_target_server', $validated)) {
             $loadBalancerUrl = trim((string) ($validated['load_balancer_url'] ?? ''));
             $targetServer = trim((string) ($validated['lb_target_server'] ?? ''));
@@ -1557,7 +1572,7 @@ class CbtInfoController extends Controller
                 $loadBalancerUrl = rtrim($targetServer, '/') . '/go-cbt';
             }
 
-            $this->writePersistedSetting('cbt_load_balancing_url', $loadBalancerUrl ?: $this->homepageUrl('/go-cbt'));
+            $this->writePersistedSetting('cbt_load_balancing_url', $loadBalancerUrl ?: $this->routeOrHomepageUrl('/go-cbt'));
         }
         if (array_key_exists('token_endpoint', $validated)) {
             $this->writePersistedSetting('cbt_token_endpoint', trim((string) ($validated['token_endpoint'] ?? '')) ?: '/token.json');
@@ -1633,7 +1648,7 @@ class CbtInfoController extends Controller
         }
 
         // Get LB base URL
-        $lb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->homepageUrl('/go-cbt'));
+        $lb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->routeOrHomepageUrl('/go-cbt'));
         $lb = rtrim($lb, '/');
 
         $tokenEndpoint = (string) $this->readPersistedSetting('cbt_token_endpoint', '/token.json');
@@ -2257,7 +2272,7 @@ class CbtInfoController extends Controller
                     'server_backup2_capacity' => max(1, (int) $this->readPersistedSetting('cbt_server_capacity_backup2', (int) ($persistentServerMeta['server_backup2_capacity'] ?? 40))),
                     'description' => $settingData?->alamat ?? 'Silakan perbarui token dan URL CBT melalui halaman admin.',
                     'school' => $settingData?->sekolah ?? 'GARUDA CBT',
-                    'load_balancing_url' => (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->homepageUrl('/go-cbt')),
+                    'load_balancing_url' => (string) $this->readPersistedSetting('cbt_load_balancing_url', $this->routeOrHomepageUrl('/go-cbt')),
                     'app_name' => $settingData?->nama_aplikasi ?? 'GARUDA CBT',
                     'token_updated_at' => $tokenUpdatedAt ? now()->parse($tokenUpdatedAt)->format('d-m-Y H:i:s') : null,
                     'token_valid_until' => $tokenValidUntil,
@@ -3704,7 +3719,7 @@ class CbtInfoController extends Controller
     {
         $normalized = $this->normalizeConfiguredServers($servers);
         $eligibleMirrorCount = $this->countEligibleLoadBalancerServers($normalized);
-        $defaultLb = $this->homepageUrl('/go-cbt');
+        $defaultLb = $this->routeOrHomepageUrl('/go-cbt');
         $configuredLb = (string) $this->readPersistedSetting('cbt_load_balancing_url', $defaultLb);
         $loadBalancingUrl = $eligibleMirrorCount > 1 ? $configuredLb : null;
 
@@ -3776,6 +3791,15 @@ class CbtInfoController extends Controller
         }
 
         return $baseUrl . $path;
+    }
+
+    private function routeOrHomepageUrl(string $path = ''): string
+    {
+        try {
+            return route('cbt.lb');
+        } catch (\Throwable $e) {
+            return $this->homepageUrl($path);
+        }
     }
 
     private function storeServerMetaToFile(array $updates): void
